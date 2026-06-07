@@ -25,6 +25,7 @@ model User {
   personnelNumber  String?
   isActive         Boolean      @default(true)
   pushSubscription String?
+  tempAdminUntil   DateTime?
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
 
