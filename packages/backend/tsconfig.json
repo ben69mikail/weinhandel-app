@@ -7,6 +7,6 @@
     "rootDir": "src",
     "declaration": true
   },
-  "include": ["src/**/*", "prisma/**/*"],
+  "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]
 }
