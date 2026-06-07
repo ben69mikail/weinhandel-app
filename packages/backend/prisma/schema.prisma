@@ -1,0 +1,337 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id               String       @id @default(cuid())
+  email            String       @unique
+  passwordHash     String
+  firstName        String
+  lastName         String
+  phone            String?
+  address          String?
+  birthday         DateTime?
+  role             Role         @default(EMPLOYEE)
+  employeeType     EmployeeType @default(PARTTIME)
+  monthlyHours     Float?
+  skills           String[]
+  avatarUrl        String?
+  personnelNumber  String?
+  isActive         Boolean      @default(true)
+  pushSubscription String?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  shifts               ShiftAssignment[]
+  availabilities       Availability[]
+  vacationRequests     VacationRequest[]
+  timeEntries          TimeEntry[]
+  shiftSwapRequests    ShiftSwapRequest[]    @relation("SwapRequester")
+  shiftSwapTargets     ShiftSwapRequest[]    @relation("SwapTarget")
+  taskCompletions      TaskCompletion[]
+  hygieneConfirmations HygieneConfirmation[]
+  notifications        Notification[]
+  tipEntries           TipEntry[]
+}
+
+enum Role {
+  ADMIN
+  EMPLOYEE
+}
+
+enum EmployeeType {
+  PARTTIME
+  MINIJOB
+}
+
+model Shift {
+  id             String    @id @default(cuid())
+  title          String
+  date           DateTime
+  startTime      String
+  endTime        String
+  location       String    @default("Weinhandel")
+  type           ShiftType @default(REGULAR)
+  area           String    @default("Arbeitsbereich 1")
+  maxWorkers     Int       @default(2)
+  minWorkers     Int       @default(1)
+  notes          String?
+  isPublished    Boolean   @default(false)
+  isOpenShift    Boolean   @default(false)
+  requiredSkills String[]
+  color          String    @default("#3B82F6")
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  assignments  ShiftAssignment[]
+  swapRequests ShiftSwapRequest[]
+  tasks        Task[]
+}
+
+enum ShiftType {
+  REGULAR
+  EVENT
+  TASTING
+  CONCERT
+  HOLIDAY_COVERAGE
+}
+
+model ShiftAssignment {
+  id          String           @id @default(cuid())
+  shift       Shift            @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  shiftId     String
+  user        User             @relation(fields: [userId], references: [id])
+  userId      String
+  status      AssignmentStatus @default(ASSIGNED)
+  appliedAt   DateTime         @default(now())
+  confirmedAt DateTime?
+
+  @@unique([shiftId, userId])
+}
+
+enum AssignmentStatus {
+  APPLIED
+  ASSIGNED
+  APPROVED
+  REJECTED
+}
+
+model Availability {
+  id        String           @id @default(cuid())
+  user      User             @relation(fields: [userId], references: [id])
+  userId    String
+  date      DateTime
+  type      AvailabilityType
+  note      String?
+  createdAt DateTime         @default(now())
+
+  @@unique([userId, date])
+}
+
+enum AvailabilityType {
+  AVAILABLE
+  UNAVAILABLE
+  PREFERRED
+  PARTIAL
+}
+
+model VacationRequest {
+  id        String        @id @default(cuid())
+  user      User          @relation(fields: [userId], references: [id])
+  userId    String
+  startDate DateTime
+  endDate   DateTime
+  type      AbsenceType   @default(VACATION)
+  status    RequestStatus @default(PENDING)
+  note      String?
+  adminNote String?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+}
+
+enum AbsenceType {
+  VACATION
+  SICK
+  SPECIAL
+}
+
+enum RequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model TimeEntry {
+  id           String    @id @default(cuid())
+  user         User      @relation(fields: [userId], references: [id])
+  userId       String
+  shiftId      String?
+  clockIn      DateTime
+  clockOut     DateTime?
+  breakStart   DateTime?
+  breakEnd     DateTime?
+  breakMinutes Int       @default(0)
+  autoBreak    Boolean   @default(false)
+  totalMinutes Float?
+  netMinutes   Float?
+  isGastro     Boolean   @default(false)
+  note         String?
+  correctedBy  String?
+  createdAt    DateTime  @default(now())
+}
+
+model ShiftSwapRequest {
+  id           String        @id @default(cuid())
+  requester    User          @relation("SwapRequester", fields: [requesterId], references: [id])
+  requesterId  String
+  fromShift    Shift         @relation(fields: [fromShiftId], references: [id])
+  fromShiftId  String
+  toShiftId    String?
+  targetUser   User?         @relation("SwapTarget", fields: [targetUserId], references: [id])
+  targetUserId String?
+  status       RequestStatus @default(PENDING)
+  note         String?
+  createdAt    DateTime      @default(now())
+}
+
+model Task {
+  id          String    @id @default(cuid())
+  title       String
+  description String?
+  category    String    @default("Allgemein")
+  shiftId     String?
+  shift       Shift?    @relation(fields: [shiftId], references: [id])
+  isRecurring Boolean   @default(false)
+  priority    Int       @default(1)
+  dueDate     DateTime?
+  createdAt   DateTime  @default(now())
+
+  completions TaskCompletion[]
+}
+
+model TaskCompletion {
+  id          String     @id @default(cuid())
+  task        Task       @relation(fields: [taskId], references: [id])
+  taskId      String
+  user        User       @relation(fields: [userId], references: [id])
+  userId      String
+  status      TaskStatus
+  note        String?
+  completedAt DateTime   @default(now())
+}
+
+enum TaskStatus {
+  DONE
+  POSTPONED
+}
+
+model HygieneConfirmation {
+  id          String   @id @default(cuid())
+  user        User     @relation(fields: [userId], references: [id])
+  userId      String
+  version     String   @default("2024-01")
+  confirmedAt DateTime @default(now())
+}
+
+model Event {
+  id          String    @id @default(cuid())
+  title       String
+  description String?
+  date        DateTime
+  endDate     DateTime?
+  type        EventType @default(GENERAL)
+  color       String    @default("#6366F1")
+  isPublic    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+}
+
+enum EventType {
+  GENERAL
+  BIRTHDAY
+  TASTING
+  CONCERT
+  TEAM_EVENT
+  HOLIDAY
+}
+
+model Document {
+  id          String           @id @default(cuid())
+  title       String
+  category    DocumentCategory
+  content     String?
+  fileUrl     String?
+  fileName    String?
+  mimeType    String?
+  isPublished Boolean          @default(true)
+  sortOrder   Int              @default(0)
+  updatedAt   DateTime         @updatedAt
+  createdAt   DateTime         @default(now())
+}
+
+enum DocumentCategory {
+  WINE_LIST
+  FOOD_MENU
+  DRINKS_MENU
+  SPECIAL_MENU
+  RECIPE
+  CHECKLIST
+  DRESSCODE
+  SERVICE_PROTOCOL
+  HYGIENE
+  LOGO
+  BRAND_ASSET
+  EMPLOYEE_INFO
+  OTHER
+}
+
+model TipCalculation {
+  id           String     @id @default(cuid())
+  shiftId      String
+  shiftDate    DateTime
+  totalTip     Float
+  calculatedAt DateTime   @default(now())
+  entries      TipEntry[]
+}
+
+model TipEntry {
+  id            String         @id @default(cuid())
+  calculation   TipCalculation @relation(fields: [calculationId], references: [id])
+  calculationId String
+  user          User           @relation(fields: [userId], references: [id])
+  userId        String
+  hoursWorked   Float
+  tipAmount     Float
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  user      User             @relation(fields: [userId], references: [id])
+  userId    String
+  type      NotificationType
+  title     String
+  message   String
+  data      Json?
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+}
+
+enum NotificationType {
+  SHIFT_ASSIGNED
+  SHIFT_APPROVED
+  SHIFT_REJECTED
+  VACATION_APPROVED
+  VACATION_REJECTED
+  SWAP_REQUEST
+  SWAP_APPROVED
+  SWAP_REJECTED
+  SHIFT_REMINDER
+  BIRTHDAY
+  TASK_ASSIGNED
+  GENERAL
+}
+
+model Settings {
+  id                    String   @id @default("singleton")
+  businessName          String   @default("Weinhandel")
+  businessAddress       String?
+  logoUrl               String?
+  defaultShiftStart     String   @default("09:00")
+  defaultShiftEnd       String   @default("17:00")
+  autoBreakAfterHours   Float    @default(6.0)
+  autoBreakMinutes      Int      @default(15)
+  datevClientNumber     String?
+  datevConsultantNumber String?
+  emailFrom             String?
+  smtpHost              String?
+  smtpPort              Int?
+  smtpUser              String?
+  smtpPassword          String?
+  hygieneVersion        String   @default("2024-01")
+  updatedAt             DateTime @updatedAt
+}
