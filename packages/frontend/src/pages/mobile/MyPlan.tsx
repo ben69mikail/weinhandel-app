@@ -17,11 +17,6 @@ function getMonthDates(year: number, month: number) {
 const STATUS_COLOR: Record<string, string> = { APPROVED: "green", ASSIGNED: "blue", APPLIED: "yellow", REJECTED: "red" };
 const TYPE_LABELS: Record<string, string> = { REGULAR: "Regulär", EVENT: "Event", TASTING: "Verkostung", CONCERT: "Konzert", HOLIDAY_COVERAGE: "Notfall" };
 
-const AVAIL_TYPES = [
-  { value: "AVAILABLE",   label: "Verfügbar",  bg: "bg-green-500" },
-  { value: "UNAVAILABLE", label: "Nicht da",   bg: "bg-red-500" },
-] as const;
-
 // ── Mein Plan Tab ──────────────────────────────────────────────────────────────
 function MeinPlanTab() {
   const now = new Date();
@@ -150,21 +145,23 @@ function SchichtboerseTab() {
           const applied = hasApplied(s.id);
           const free = s.maxWorkers - s.assignments.length;
           return (
-            <div key={s.id} className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
-              <div className="h-1.5" style={{ backgroundColor: s.color }} />
+            <div key={s.id}
+              className={cn("rounded-2xl border overflow-hidden shadow-sm transition-colors",
+                applied ? "border-green-800 bg-green-900" : "border-gray-200 bg-white")}>
+              <div className="h-1.5" style={{ backgroundColor: applied ? "#14532d" : s.color }} />
               <div className="p-4 space-y-3">
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <h3 className="font-semibold text-gray-900">{s.title}</h3>
-                    <p className="text-sm text-gray-500">
+                    <h3 className={cn("font-semibold", applied ? "text-white" : "text-gray-900")}>{s.title}</h3>
+                    <p className={cn("text-sm", applied ? "text-green-200" : "text-gray-500")}>
                       {new Date(s.date).toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "long" })}
                     </p>
                   </div>
                   <Badge label={TYPE_LABELS[s.type] ?? s.type} color="wine" />
                 </div>
-                <div className="flex flex-wrap gap-3 text-sm text-gray-600">
-                  <span className="flex items-center gap-1"><Clock size={14} className="text-gray-400" />{s.startTime}–{s.endTime}</span>
-                  <span className="flex items-center gap-1"><Users size={14} className="text-gray-400" />{free} Platz{free !== 1 ? "plätze" : ""} frei</span>
+                <div className={cn("flex flex-wrap gap-3 text-sm", applied ? "text-green-100" : "text-gray-600")}>
+                  <span className="flex items-center gap-1"><Clock size={14} className={applied ? "text-green-300" : "text-gray-400"} />{s.startTime}–{s.endTime}</span>
+                  <span className="flex items-center gap-1"><Users size={14} className={applied ? "text-green-300" : "text-gray-400"} />{free} Platz{free !== 1 ? "plätze" : ""} frei</span>
                 </div>
                 {s.requiredSkills.length > 0 && (
                   <div className="flex flex-wrap gap-1">
@@ -175,7 +172,7 @@ function SchichtboerseTab() {
                   onClick={() => !applied && apply.mutate(s.id)}
                   disabled={applied || apply.isPending || free <= 0}
                   variant={applied ? "secondary" : "primary"}
-                  className="w-full justify-center"
+                  className={cn("w-full justify-center", applied ? "!bg-green-700 !text-white !border-green-700" : "")}
                   size="sm"
                 >
                   {applied ? "✓ Beworben" : free <= 0 ? "Ausgebucht" : "Jetzt bewerben"}
@@ -197,7 +194,6 @@ function VerfuegbarkeitTab() {
   const [pickerDay, setPickerDay] = useState<number | null>(null);
   const [startTime, setStartTime] = useState("09:00");
   const [endTime, setEndTime] = useState("17:00");
-  const [note, setNote] = useState("");
   const monthStr = `${year}-${String(month).padStart(2, "0")}`;
   const { data: avails = [] } = useAvailability(monthStr);
   const setAvail = useSetAvailability();
@@ -213,19 +209,19 @@ function VerfuegbarkeitTab() {
     setPickerDay(day);
     setStartTime(existing?.startTime ?? "09:00");
     setEndTime(existing?.endTime ?? "17:00");
-    setNote(existing?.note ?? "");
   };
 
-  const handleSelect = async (type: string) => {
+  const handleSave = async () => {
     if (!pickerDay) return;
     const date = `${year}-${String(month).padStart(2,"0")}-${String(pickerDay).padStart(2,"0")}`;
-    await setAvail.mutateAsync({ date, type, startTime, endTime, note: note || undefined });
+    await setAvail.mutateAsync({ date, type: "AVAILABLE", startTime, endTime });
     setPickerDay(null);
   };
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-gray-500">Tippe auf einen Tag und trage deine Verfügbarkeit ein.</p>
+      <p className="text-sm text-gray-500">Trage ein, wann du verfügbar bist. Der Administrator sieht deine Zeiten im Schichtplan.</p>
+
       <div className="bg-white rounded-2xl border border-gray-200 p-4">
         <div className="flex items-center justify-between mb-4">
           <button onClick={prev} className="p-1.5 hover:bg-gray-100 rounded-lg"><ChevronLeft size={18} /></button>
@@ -243,18 +239,20 @@ function VerfuegbarkeitTab() {
           {Array.from({ length: startDay }).map((_, i) => <div key={`e${i}`} />)}
           {Array.from({ length: last }, (_, i) => i + 1).map((day) => {
             const avail = availByDay.get(day);
-            const dot = avail ? AVAIL_TYPES.find((t) => t.value === avail.type)?.bg : null;
             const isToday = day === now.getDate() && month === now.getMonth()+1 && year === now.getFullYear();
             const isPast = new Date(year, month-1, day) < new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const isActive = avail?.type === "AVAILABLE";
             return (
               <button key={day} disabled={isPast}
                 onClick={() => !isPast && openPicker(day)}
                 className={cn("aspect-square rounded-lg flex flex-col items-center justify-center text-sm transition-colors",
-                  isPast ? "opacity-30 cursor-not-allowed" : "hover:bg-gray-100",
-                  isToday ? "ring-2 ring-[#8B1A1A]" : "",
-                  pickerDay === day ? "bg-gray-100" : "")}>
-                <span className={isToday ? "font-bold text-[#8B1A1A]" : "text-gray-700"}>{day}</span>
-                {dot && <div className={cn("w-1.5 h-1.5 rounded-full mt-0.5", dot)} />}
+                  isPast ? "opacity-25 cursor-not-allowed" : "hover:bg-gray-100",
+                  pickerDay === day ? "ring-2 ring-[#8B1A1A]" : "",
+                  isActive ? "bg-green-800 !text-white" : isToday ? "ring-2 ring-[#8B1A1A]" : "")}>
+                <span className={cn(isActive ? "text-white font-semibold" : isToday ? "font-bold text-[#8B1A1A]" : "text-gray-700")}>{day}</span>
+                {isActive && avail?.startTime && (
+                  <span className="text-[8px] text-green-200 leading-tight">{avail.startTime}</span>
+                )}
               </button>
             );
           })}
@@ -262,58 +260,39 @@ function VerfuegbarkeitTab() {
       </div>
 
       {pickerDay && (
-        <div className="bg-white rounded-2xl border border-gray-200 p-4 space-y-3">
-          <p className="font-medium text-gray-800">
+        <div className="bg-white rounded-2xl border border-gray-200 p-4 space-y-4">
+          <p className="font-semibold text-gray-800">
             {new Date(year, month-1, pickerDay).toLocaleDateString("de-DE", { weekday:"long", day:"2-digit", month:"long" })}
           </p>
+          <p className="text-sm text-gray-500">Von wann bis wann bist du verfügbar?</p>
 
-          {/* Zeitraum */}
-          <div>
-            <p className="text-xs font-medium text-gray-500 mb-2">Verfügbar von – bis</p>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="text-xs text-gray-400 block mb-1">Von</label>
-                <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#8B1A1A]/30" />
-              </div>
-              <div>
-                <label className="text-xs text-gray-400 block mb-1">Bis</label>
-                <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#8B1A1A]/30" />
-              </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-medium text-gray-500 block mb-1">Von</label>
+              <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)}
+                className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-700/30 font-medium" />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-gray-500 block mb-1">Bis</label>
+              <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)}
+                className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-700/30 font-medium" />
             </div>
           </div>
 
-          {/* Status */}
-          <div className="grid grid-cols-2 gap-2">
-            {AVAIL_TYPES.map((t) => (
-              <button key={t.value} onClick={() => handleSelect(t.value)}
-                disabled={setAvail.isPending}
-                className={cn("py-3 rounded-xl text-sm font-medium border-2 transition-colors",
-                  availByDay.get(pickerDay!)?.type === t.value
-                    ? "border-current bg-gray-50 font-bold"
-                    : "border-gray-200 text-gray-700 hover:border-gray-300")}>
-                <div className={cn("w-3 h-3 rounded-full mx-auto mb-1", t.bg)} />
-                {t.label}
-              </button>
-            ))}
+          <div className="flex gap-2">
+            <Button variant="secondary" className="flex-1" onClick={() => setPickerDay(null)}>Abbrechen</Button>
+            <Button className="flex-1 !bg-green-800 hover:!bg-green-900 justify-center" onClick={handleSave} disabled={setAvail.isPending}>
+              {setAvail.isPending ? "Speichern..." : "✓ Verfügbar eintragen"}
+            </Button>
           </div>
 
-          <input value={note} onChange={(e) => setNote(e.target.value)}
-            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#8B1A1A]/30"
-            placeholder="Notiz (optional)" />
+          {availByDay.get(pickerDay) && (
+            <p className="text-xs text-center text-gray-400">Bereits eingetragen: {availByDay.get(pickerDay)?.startTime}–{availByDay.get(pickerDay)?.endTime}</p>
+          )}
         </div>
       )}
 
-      <div className="flex gap-4">
-        {AVAIL_TYPES.map((t) => (
-          <div key={t.value} className="flex items-center gap-1.5 text-xs text-gray-600">
-            <div className={cn("w-2.5 h-2.5 rounded-full", t.bg)} />
-            {t.label}
-          </div>
-        ))}
-        <p className="text-xs text-gray-400 ml-auto">Tippe auf Tag zum Eintragen</p>
-      </div>
+      <p className="text-xs text-gray-400 text-center">Grüne Tage = du bist verfügbar · Tippe auf Tag zum Bearbeiten</p>
     </div>
   );
 }
@@ -327,14 +306,13 @@ export default function MyPlan() {
   const [activeTab, setActiveTab] = useState<Tab>(initialTab);
 
   const tabs: { id: Tab; label: string }[] = [
-    { id: "plan",          label: "Mein Plan" },
-    { id: "schichten",     label: "Schichtbörse" },
+    { id: "plan",           label: "Mein Plan" },
+    { id: "schichten",      label: "Schichtbörse" },
     { id: "verfuegbarkeit", label: "Verfügbarkeit" },
   ];
 
   return (
     <div className="px-4 pt-6 pb-4 space-y-4">
-      {/* Sub-Navigation */}
       <div className="flex bg-gray-100 rounded-xl p-1 gap-1">
         {tabs.map((t) => (
           <button key={t.id} onClick={() => setActiveTab(t.id)}
@@ -345,8 +323,8 @@ export default function MyPlan() {
         ))}
       </div>
 
-      {activeTab === "plan"          && <MeinPlanTab />}
-      {activeTab === "schichten"     && <SchichtboerseTab />}
+      {activeTab === "plan"           && <MeinPlanTab />}
+      {activeTab === "schichten"      && <SchichtboerseTab />}
       {activeTab === "verfuegbarkeit" && <VerfuegbarkeitTab />}
     </div>
   );

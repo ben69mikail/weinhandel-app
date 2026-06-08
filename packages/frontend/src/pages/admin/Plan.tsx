@@ -96,9 +96,8 @@ export default function Plan() {
 
       {/* Legend */}
       <div className="flex flex-wrap gap-4 px-1 text-xs text-gray-500">
-        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-green-400 inline-block" /> Verfügbar (mit Zeit)</span>
-        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-red-400 inline-block" /> Nicht da</span>
-        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400 inline-block" /> Beworben für Schicht</span>
+        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-green-800 inline-block" /> Verfügbar / Beworben</span>
+        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-[#8B1A1A] inline-block" /> Eingeteilt</span>
       </div>
 
       {isLoading ? (
@@ -118,13 +117,8 @@ export default function Plan() {
                   </div>
                   <div className="flex items-center gap-1.5 mt-1">
                     {dayAvailCount > 0 && (
-                      <span className="flex items-center gap-0.5 text-[10px] text-green-700 bg-green-100 rounded px-1 py-0.5">
-                        <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />{dayAvailCount} frei
-                      </span>
-                    )}
-                    {dayUnavailCount > 0 && (
-                      <span className="flex items-center gap-0.5 text-[10px] text-red-700 bg-red-100 rounded px-1 py-0.5">
-                        <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block" />{dayUnavailCount} weg
+                      <span className="flex items-center gap-0.5 text-[10px] text-white bg-green-800 rounded px-1 py-0.5 font-semibold">
+                        {dayAvailCount} verfügbar
                       </span>
                     )}
                   </div>
@@ -141,45 +135,38 @@ export default function Plan() {
                 <span className="text-xs font-medium text-gray-700 truncate">{u.firstName}</span>
               </div>
               {days.map((d, i) => {
-                const dayShifts = shifts.filter((s) => isSameDay(new Date(s.date), d) && s.assignments.some((a) => a.userId === u.id && a.status !== "REJECTED"));
+                const dayShifts = shifts.filter((s) => isSameDay(new Date(s.date), d) && s.assignments.some((a) => a.userId === u.id && (a.status === "ASSIGNED" || a.status === "APPROVED")));
                 const avail = getAvail(u.id, d);
                 const appliedShifts = getApplied(u.id, d);
                 const isAvailable = avail?.type === "AVAILABLE";
-                const isUnavailable = avail?.type === "UNAVAILABLE";
 
                 return (
                   <div key={i}
                     className={`border-l border-gray-100 p-1 min-h-[64px] cursor-pointer group relative transition-colors
-                      ${isAvailable ? "bg-green-50/60 hover:bg-green-50" : isUnavailable ? "bg-red-50/40 hover:bg-red-50" : "hover:bg-gray-50"}`}
+                      ${isAvailable ? "bg-green-50/40 hover:bg-green-50" : "hover:bg-gray-50"}`}
                     onClick={() => openCreate(d)}>
 
-                    {/* Availability indicator */}
-                    {avail && (
-                      <div className={`text-[10px] font-medium rounded px-1 py-0.5 mb-0.5 flex items-center gap-1 w-fit
-                        ${isAvailable ? "text-green-700 bg-green-100" : "text-red-700 bg-red-100"}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full inline-block ${isAvailable ? "bg-green-500" : "bg-red-500"}`} />
-                        {isAvailable
-                          ? (avail.startTime && avail.endTime ? `${avail.startTime}–${avail.endTime}` : "Verfügbar")
-                          : "Nicht da"}
+                    {/* Availability: dunkelgrün mit Zeit */}
+                    {isAvailable && (
+                      <div className="text-[10px] font-semibold rounded px-1 py-0.5 mb-0.5 flex items-center gap-0.5 w-fit text-white bg-green-800">
+                        {avail!.startTime && avail!.endTime ? `${avail!.startTime}–${avail!.endTime}` : "Verfügbar"}
                       </div>
                     )}
 
-                    {/* Applied badges */}
+                    {/* Schichtbewerbung (APPLIED): auch dunkelgrün */}
                     {appliedShifts.map((s) => (
                       <div key={s.id}
                         onClick={(e) => { e.stopPropagation(); setSelectedShift(s); }}
-                        className="text-[10px] font-medium rounded px-1 py-0.5 mb-0.5 flex items-center gap-1 w-fit text-amber-700 bg-amber-100 cursor-pointer hover:bg-amber-200">
-                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block" />
-                        Beworben
+                        className="text-[10px] font-semibold rounded px-1 py-0.5 mb-0.5 flex items-center gap-0.5 w-fit text-white bg-green-700 cursor-pointer hover:bg-green-800">
+                        📋 {s.startTime}–{s.endTime}
                       </div>
                     ))}
 
-                    {/* Assigned shifts */}
+                    {/* Eingeteilt: bordeaux */}
                     {dayShifts.map((s) => (
                       <div key={s.id}
                         onClick={(e) => { e.stopPropagation(); setSelectedShift(s); }}
-                        className="text-[10px] rounded px-1.5 py-1 mb-0.5 cursor-pointer hover:opacity-80 text-white truncate font-medium"
-                        style={{ backgroundColor: s.color }}>
+                        className="text-[10px] rounded px-1.5 py-1 mb-0.5 cursor-pointer hover:opacity-80 text-white truncate font-medium bg-[#8B1A1A]">
                         {s.startTime}–{s.endTime}
                       </div>
                     ))}
@@ -222,16 +209,16 @@ export default function Plan() {
           </div>
 
           {/* Verfügbar-Zusammenfassung */}
-          <div className="grid grid-cols-8 bg-green-50/30 min-h-[40px]">
-            <div className="px-3 py-2 flex items-center text-xs text-green-700 border-r border-gray-100 font-medium gap-1">
-              <span className="w-2 h-2 rounded-full bg-green-500 inline-block" /> Verfügbar
+          <div className="grid grid-cols-8 bg-green-900/5 min-h-[40px]">
+            <div className="px-3 py-2 flex items-center text-xs text-green-900 border-r border-gray-100 font-semibold gap-1">
+              <span className="w-2 h-2 rounded-full bg-green-800 inline-block" /> Verfügbar
             </div>
             {days.map((d, i) => {
               const avails = allAvails.filter((a) => isSameDay(new Date(a.date), d) && a.type === "AVAILABLE");
               return (
                 <div key={i} className="border-l border-gray-100 p-1 flex flex-col gap-0.5">
                   {avails.map((a) => (
-                    <div key={a.id} className="text-[10px] text-green-700 truncate">
+                    <div key={a.id} className="text-[10px] font-semibold text-white bg-green-800 rounded px-1 py-0.5 truncate">
                       {a.user.firstName} {a.startTime ? `${a.startTime}–${a.endTime}` : ""}
                     </div>
                   ))}
