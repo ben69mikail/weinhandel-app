@@ -15,8 +15,19 @@ function getWeek(d: Date): number {
   const onejan = new Date(d.getFullYear(), 0, 1);
   return Math.ceil((((d.getTime() - onejan.getTime()) / 86400000) + onejan.getDay() + 1) / 7);
 }
+// timezone-safe: compare local date parts as string
+function toLocalDateStr(d: Date) {
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
 function isSameDay(a: Date, b: Date) {
-  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  return toLocalDateStr(a) === toLocalDateStr(b);
+}
+// parse ISO date string to local Date (robust against UTC midnight → prev day in UTC+ zones)
+function parseAvailDate(dateStr: string): Date {
+  // "2026-06-26T00:00:00.000Z" → take date part only → local Date
+  const s = dateStr.slice(0, 10); // "2026-06-26"
+  const [y, m, d] = s.split("-").map(Number);
+  return new Date(y, m - 1, d); // local midnight, no timezone shift
 }
 const DAY_NAMES = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 const TYPE_LABELS: Record<string, string> = { REGULAR: "Regulär", EVENT: "Event", TASTING: "Verkostung", CONCERT: "Konzert", HOLIDAY_COVERAGE: "Notfall" };
@@ -33,11 +44,17 @@ export default function Plan() {
 
   const weekStr = `${year}-W${String(week).padStart(2, "0")}`;
   const firstDayOfWeek = (() => { const jan4 = new Date(year, 0, 4); return new Date(jan4.getTime() - ((jan4.getDay() || 7) - 1) * 86400000 + (week - 1) * 7 * 86400000); })();
+  const lastDayOfWeek = new Date(firstDayOfWeek.getTime() + 6 * 86400000);
   const availMonthStr = `${firstDayOfWeek.getFullYear()}-${String(firstDayOfWeek.getMonth() + 1).padStart(2, "0")}`;
+  const availMonthStr2 = lastDayOfWeek.getMonth() !== firstDayOfWeek.getMonth()
+    ? `${lastDayOfWeek.getFullYear()}-${String(lastDayOfWeek.getMonth() + 1).padStart(2, "0")}`
+    : null;
 
   const { data: shifts = [], isLoading } = useShifts({ week: weekStr });
   const { data: users = [] } = useUsers();
-  const { data: allAvails = [] } = useAllAvailability(availMonthStr);
+  const { data: avails1 = [] } = useAllAvailability(availMonthStr);
+  const { data: avails2 = [] } = useAllAvailability(availMonthStr2 ?? "__disabled__");
+  const allAvails = availMonthStr2 ? [...avails1, ...avails2] : avails1;
   const createShift = useCreateShift();
   const updateShift = useUpdateShift();
   const deleteShift = useDeleteShift();
@@ -76,13 +93,13 @@ export default function Plan() {
     setSelectedShift((prev) => prev ? { ...prev, isOpenShift: !prev.isOpenShift, isPublished: true } : prev);
   };
 
-  // Helper: get availability for a user on a specific day
+  // Helper: use a.user.id (always present from explicit include select) + robust date parse
   const getAvail = (userId: string, day: Date) =>
-    allAvails.find((a) => a.userId === userId && isSameDay(new Date(a.date), day));
+    allAvails.find((a) => a.user.id === userId && isSameDay(parseAvailDate(a.date), day));
 
   // Helper: get APPLIED shifts for a user on a specific day
   const getApplied = (userId: string, day: Date) =>
-    shifts.filter((s) => isSameDay(new Date(s.date), day) && s.assignments.some((a) => a.userId === userId && a.status === "APPLIED"));
+    shifts.filter((s) => isSameDay(parseAvailDate(s.date), day) && s.assignments.some((a) => a.userId === userId && a.status === "APPLIED"));
 
   return (
     <div className="space-y-4">
@@ -96,8 +113,9 @@ export default function Plan() {
 
       {/* Legend */}
       <div className="flex flex-wrap gap-4 px-1 text-xs text-gray-500">
-        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-green-800 inline-block" /> Verfügbar / Beworben</span>
-        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-[#8B1A1A] inline-block" /> Eingeteilt</span>
+        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full inline-block" style={{backgroundColor:"#166534"}} /> Verfügbar / Beworben</span>
+        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full inline-block" style={{backgroundColor:"#8B1A1A"}} /> Eingeteilt</span>
+        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full inline-block" style={{backgroundColor:"#dc2626"}} /> Offene Schicht (zu besetzen)</span>
       </div>
 
       {isLoading ? (
@@ -108,8 +126,8 @@ export default function Plan() {
           <div className="grid grid-cols-8 border-b border-gray-200 bg-gray-50">
             <div className="px-3 py-2 text-xs font-medium text-gray-400">Mitarbeiter</div>
             {days.map((d, i) => {
-              const dayAvailCount = allAvails.filter((a) => isSameDay(new Date(a.date), d) && a.type === "AVAILABLE").length;
-              const dayUnavailCount = allAvails.filter((a) => isSameDay(new Date(a.date), d) && a.type === "UNAVAILABLE").length;
+              const dayAvailCount = allAvails.filter((a) => isSameDay(parseAvailDate(a.date), d) && a.type === "AVAILABLE").length;
+              const dayUnavailCount = allAvails.filter((a) => isSameDay(parseAvailDate(a.date), d) && a.type === "UNAVAILABLE").length;
               return (
                 <div key={i} className="px-3 py-2 text-xs font-medium text-gray-600 border-l border-gray-200">
                   <div className={`text-base font-bold ${isSameDay(d, now) ? "text-[#8B1A1A]" : "text-gray-800"}`}>
@@ -186,24 +204,28 @@ export default function Plan() {
             </div>
           ))}
 
-          {/* Unassigned / Open shifts row */}
-          <div className="grid grid-cols-8 border-b border-gray-100 bg-amber-50/50 min-h-[48px]">
-            <div className="px-3 py-2 flex items-center text-xs text-gray-400 border-r border-gray-100 font-medium">Offen / Unbesetzt</div>
+          {/* Unassigned / Open shifts row — KNALLROT */}
+          <div className="grid grid-cols-8 border-b border-gray-100 min-h-[48px]" style={{ backgroundColor: "rgba(220,38,38,0.04)" }}>
+            <div className="px-3 py-2 flex items-center text-xs border-r border-gray-100 font-semibold gap-1" style={{ color: "#b91c1c" }}>
+              <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: "#dc2626" }} /> Offen
+            </div>
             {days.map((d, i) => {
-              const openShifts = shifts.filter((s) => isSameDay(new Date(s.date), d) && s.assignments.length === 0);
-              const partialShifts = shifts.filter((s) => isSameDay(new Date(s.date), d) && s.assignments.length > 0 && s.assignments.length < s.minWorkers);
+              const openShifts = shifts.filter((s) => isSameDay(parseAvailDate(s.date), d) && s.assignments.length === 0);
+              const partialShifts = shifts.filter((s) => isSameDay(parseAvailDate(s.date), d) && s.assignments.filter(a => a.status !== "REJECTED").length > 0 && s.assignments.filter(a => a.status !== "REJECTED").length < s.minWorkers);
               return (
                 <div key={i} className="border-l border-gray-100 p-1">
                   {openShifts.map((s) => (
                     <div key={s.id} onClick={() => setSelectedShift(s)}
-                      className="text-[10px] rounded px-1.5 py-1 mb-0.5 cursor-pointer border border-dashed border-amber-300 text-amber-700 bg-amber-50 truncate hover:bg-amber-100 font-medium">
-                      📋 {s.title} {s.startTime}
+                      className="text-[10px] rounded px-1.5 py-1 mb-0.5 cursor-pointer text-white truncate font-semibold"
+                      style={{ backgroundColor: "#dc2626" }}>
+                      {s.title} {s.startTime}–{s.endTime}
                     </div>
                   ))}
                   {partialShifts.map((s) => (
                     <div key={s.id} onClick={() => setSelectedShift(s)}
-                      className="text-[10px] rounded px-1.5 py-1 mb-0.5 cursor-pointer border border-dashed border-orange-300 text-orange-700 bg-orange-50 truncate hover:bg-orange-100 font-medium">
-                      ⚠ {s.title} ({s.assignments.length}/{s.minWorkers})
+                      className="text-[10px] rounded px-1.5 py-1 mb-0.5 cursor-pointer text-white truncate font-semibold"
+                      style={{ backgroundColor: "#ea580c" }}>
+                      {s.title} {s.assignments.filter(a => a.status !== "REJECTED").length}/{s.minWorkers}
                     </div>
                   ))}
                 </div>
@@ -217,7 +239,7 @@ export default function Plan() {
               <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: "#166534" }} /> Verfügbar
             </div>
             {days.map((d, i) => {
-              const avails = allAvails.filter((a) => isSameDay(new Date(a.date), d) && a.type === "AVAILABLE");
+              const avails = allAvails.filter((a) => isSameDay(parseAvailDate(a.date), d) && a.type === "AVAILABLE");
               return (
                 <div key={i} className="border-l border-gray-100 p-1 flex flex-col gap-0.5">
                   {avails.map((a) => (
@@ -287,12 +309,12 @@ export default function Plan() {
 
             {/* Verfügbare Mitarbeiter (nicht beworben, nicht zugeteilt) */}
             {(() => {
-              const shiftDate = new Date(selectedShift.date);
+              const shiftDate = parseAvailDate(selectedShift.date);
               const assignedIds = new Set(selectedShift.assignments.map((a) => a.userId));
               const freeAvails = allAvails.filter((a) =>
-                isSameDay(new Date(a.date), shiftDate) &&
+                isSameDay(parseAvailDate(a.date), shiftDate) &&
                 a.type === "AVAILABLE" &&
-                !assignedIds.has(a.userId)
+                !assignedIds.has(a.user.id)
               );
               if (freeAvails.length === 0) return null;
               return (
@@ -310,7 +332,7 @@ export default function Plan() {
                           {a.startTime && <p className="text-xs text-green-600">{a.startTime}–{a.endTime}</p>}
                         </div>
                         <button
-                          onClick={() => assignShift.mutate({ shiftId: selectedShift.id, userId: a.userId })}
+                          onClick={() => assignShift.mutate({ shiftId: selectedShift.id, userId: a.user.id })}
                           disabled={assignShift.isPending}
                           className="px-2.5 py-1 text-xs bg-[#8B1A1A] text-white rounded-lg hover:bg-[#6B1414] font-medium">
                           Einteilen

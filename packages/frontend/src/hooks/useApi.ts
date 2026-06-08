@@ -218,10 +218,11 @@ export interface AvailabilityWithUser extends Availability {
   user: { id: string; firstName: string; lastName: string };
 }
 export function useAllAvailability(month: string) {
+  const valid = !!month && /^\d{4}-\d{2}$/.test(month);
   return useQuery<AvailabilityWithUser[]>({
     queryKey: ["availability", "all", month],
     queryFn: () => api.get(`/availability/all?month=${month}`).then((r) => r.data),
-    enabled: !!month,
+    enabled: valid,
   });
 }
 
