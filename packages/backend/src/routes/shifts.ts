@@ -157,4 +157,18 @@ router.post("/:id/apply", async (req: AuthRequest, res: Response) => {
   } catch (err) { console.error(err); return res.status(500).json({ error: "Serverfehler" }); }
 });
 
+// PUT /api/shifts/:id/assignments/:assignmentId (Admin — approve/reject applicant)
+router.put("/:id/assignments/:assignmentId", adminOnly, async (req: AuthRequest, res: Response) => {
+  const { status } = req.body as { status: string };
+  if (!["APPROVED", "REJECTED"].includes(status)) return res.status(400).json({ error: "Ungültiger Status" });
+  try {
+    const assignment = await prisma.shiftAssignment.update({
+      where: { id: req.params.assignmentId },
+      data: { status: status as "APPROVED" | "REJECTED" },
+      include: { user: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } } },
+    });
+    return res.json(assignment);
+  } catch (err) { console.error(err); return res.status(500).json({ error: "Serverfehler" }); }
+});
+
 export default router;

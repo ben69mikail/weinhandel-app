@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { useAuthStore } from "@/store/auth";
-import { useCurrentTimeEntry, useClockIn, useClockOut, useBreakStart, useBreakEnd, useShifts } from "@/hooks/useApi";
+import { useCurrentTimeEntry, useClockIn, useClockOut, useBreakStart, useBreakEnd, useShifts, useOpenShifts } from "@/hooks/useApi";
 import { Bell } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 function useTimer(start: string | undefined) {
   const [elapsed, setElapsed] = useState(0);
@@ -20,6 +21,7 @@ function useTimer(start: string | undefined) {
 
 export default function MobileDashboard() {
   const user = useAuthStore((s) => s.user);
+  const navigate = useNavigate();
   const { data: entry, isLoading } = useCurrentTimeEntry();
   const clockIn = useClockIn();
   const clockOut = useClockOut();
@@ -37,6 +39,7 @@ export default function MobileDashboard() {
     return Math.round(((d.getTime() - w.getTime()) / 86400000 - 3 + ((w.getDay() + 6) % 7)) / 7) + 1;
   })();
   const { data: shifts = [] } = useShifts({ week: `${now.getFullYear()}-W${String(week).padStart(2,"0")}` });
+  const { data: openShifts = [] } = useOpenShifts();
   const nextShift = shifts
     .filter((s) => new Date(s.date) >= now && s.assignments.some((a) => a.userId === user?.id))
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0];
@@ -119,6 +122,24 @@ export default function MobileDashboard() {
           )}
         </div>
       )}
+
+      {/* Quick Actions */}
+      <div className="grid grid-cols-2 gap-3">
+        <button onClick={() => navigate("/plan", { state: { tab: "schichten" } })}
+          className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 text-left hover:bg-gray-50 active:scale-95 transition-transform">
+          <div className="text-2xl mb-1">📋</div>
+          <p className="font-semibold text-gray-800 text-sm">Schichtbörse</p>
+          {openShifts.length > 0
+            ? <p className="text-xs text-[#8B1A1A] font-medium mt-0.5">{openShifts.length} offen</p>
+            : <p className="text-xs text-gray-400 mt-0.5">Keine offenen</p>}
+        </button>
+        <button onClick={() => navigate("/plan", { state: { tab: "verfuegbarkeit" } })}
+          className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 text-left hover:bg-gray-50 active:scale-95 transition-transform">
+          <div className="text-2xl mb-1">📅</div>
+          <p className="font-semibold text-gray-800 text-sm">Verfügbarkeit</p>
+          <p className="text-xs text-gray-400 mt-0.5">Eintragen</p>
+        </button>
+      </div>
 
       {/* Date card */}
       <div className="bg-[#8B1A1A] rounded-2xl p-4 text-white">

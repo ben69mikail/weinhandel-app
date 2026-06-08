@@ -204,6 +204,26 @@ export function useApplyShift() {
   });
 }
 
+export function useUpdateAssignmentStatus() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ shiftId, assignmentId, status }: { shiftId: string; assignmentId: string; status: "APPROVED" | "REJECTED" }) =>
+      api.put(`/shifts/${shiftId}/assignments/${assignmentId}`, { status }).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["shifts"] }),
+  });
+}
+
+export interface AvailabilityWithUser extends Availability {
+  user: { id: string; firstName: string; lastName: string };
+}
+export function useAllAvailability(month: string) {
+  return useQuery<AvailabilityWithUser[]>({
+    queryKey: ["availability", "all", month],
+    queryFn: () => api.get(`/availability/all?month=${month}`).then((r) => r.data),
+    enabled: !!month,
+  });
+}
+
 // --- Reporting ---
 export interface MonthlyReport {
   user: { id: string; firstName: string; lastName: string; employeeType: string; monthlyHours?: number; personnelNumber?: string };

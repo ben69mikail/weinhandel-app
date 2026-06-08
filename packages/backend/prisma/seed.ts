@@ -2,9 +2,9 @@ import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
-const PW = await bcrypt.hash("Test1234!", 10);
 
 async function main() {
+  const PW = await bcrypt.hash("Test1234!", 10);
   // Admin
   await prisma.user.upsert({
     where: { email: "martin@weinhandel.de" },

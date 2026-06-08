@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { useShifts, useUsers, useCreateShift, useUpdateShift, useDeleteShift, useAssignShift, Shift } from "@/hooks/useApi";
+import { useShifts, useUsers, useCreateShift, useUpdateShift, useDeleteShift, useAssignShift, useUpdateAssignmentStatus, Shift } from "@/hooks/useApi";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Avatar } from "@/components/ui/Avatar";
-import { ChevronLeft, ChevronRight, Plus, X, Trash2, Eye } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, X, Trash2, Eye, Users } from "lucide-react";
 
 // --- helpers ---
 function getWeekDates(year: number, week: number): Date[] {
@@ -40,6 +40,7 @@ export default function Plan() {
   const updateShift = useUpdateShift();
   const deleteShift = useDeleteShift();
   const assignShift = useAssignShift();
+  const updateAssignment = useUpdateAssignmentStatus();
 
   const days = getWeekDates(year, week);
 
@@ -77,6 +78,11 @@ export default function Plan() {
 
   const handlePublish = async (s: Shift) => {
     await updateShift.mutateAsync({ id: s.id, isPublished: true });
+  };
+
+  const handleToggleOpen = async (s: Shift) => {
+    await updateShift.mutateAsync({ id: s.id, isOpenShift: !s.isOpenShift, isPublished: true });
+    setSelectedShift((prev) => prev ? { ...prev, isOpenShift: !prev.isOpenShift, isPublished: true } : prev);
   };
 
   return (
@@ -180,18 +186,55 @@ export default function Plan() {
                   {selectedShift.assignments.map((a) => (
                     <div key={a.id} className="flex items-center gap-2">
                       <Avatar name={`${a.user.firstName} ${a.user.lastName}`} src={a.user.avatarUrl} size="sm" />
-                      <span className="text-sm text-gray-700">{a.user.firstName} {a.user.lastName}</span>
-                      <Badge label={a.status} color={a.status === "APPROVED" ? "green" : a.status === "REJECTED" ? "red" : "yellow"} className="ml-auto" />
+                      <span className="text-sm text-gray-700 flex-1 truncate">{a.user.firstName} {a.user.lastName}</span>
+                      <Badge label={a.status} color={a.status === "APPROVED" ? "green" : a.status === "REJECTED" ? "red" : a.status === "APPLIED" ? "yellow" : "blue"} />
                     </div>
                   ))}
                 </div>
               )}
             </div>
 
+            {/* Bewerber-Verwaltung */}
+            {selectedShift.assignments.some((a) => a.status === "APPLIED") && (
+              <div>
+                <p className="text-xs font-semibold text-amber-700 bg-amber-50 rounded-lg px-3 py-2 mb-2 flex items-center gap-1.5">
+                  <Users size={13} />
+                  {selectedShift.assignments.filter((a) => a.status === "APPLIED").length} Bewerbung(en) ausstehend
+                </p>
+                <div className="space-y-2">
+                  {selectedShift.assignments.filter((a) => a.status === "APPLIED").map((a) => (
+                    <div key={a.id} className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2">
+                      <Avatar name={`${a.user.firstName} ${a.user.lastName}`} src={a.user.avatarUrl} size="sm" />
+                      <span className="text-sm text-gray-700 flex-1 truncate">{a.user.firstName} {a.user.lastName}</span>
+                      <button
+                        onClick={() => updateAssignment.mutate({ shiftId: selectedShift.id, assignmentId: a.id, status: "APPROVED" })}
+                        disabled={updateAssignment.isPending}
+                        className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded-lg hover:bg-green-200 font-medium">
+                        ✓
+                      </button>
+                      <button
+                        onClick={() => updateAssignment.mutate({ shiftId: selectedShift.id, assignmentId: a.id, status: "REJECTED" })}
+                        disabled={updateAssignment.isPending}
+                        className="px-2 py-1 text-xs bg-red-100 text-red-700 rounded-lg hover:bg-red-200 font-medium">
+                        ✗
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="space-y-2 pt-2">
               {!selectedShift.isPublished && (
                 <Button className="w-full" size="sm" onClick={() => handlePublish(selectedShift)}><Eye size={14} /> Veröffentlichen</Button>
               )}
+              <Button
+                className="w-full"
+                size="sm"
+                variant={selectedShift.isOpenShift ? "secondary" : "primary"}
+                onClick={() => handleToggleOpen(selectedShift)}>
+                {selectedShift.isOpenShift ? "🔒 Schichtbörse schließen" : "🔓 In Schichtbörse stellen"}
+              </Button>
               <Button variant="secondary" className="w-full" size="sm" onClick={() => { setSelectedShift(null); openEdit(selectedShift); }}>
                 Bearbeiten
               </Button>

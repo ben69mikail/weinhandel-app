@@ -12,6 +12,25 @@ const availSchema = z.object({
   note: z.string().optional(),
 });
 
+// GET /api/availability/all (Admin — alle Mitarbeiter)
+router.get("/all", async (req: AuthRequest, res: Response) => {
+  if (req.user!.role !== "ADMIN") return res.status(403).json({ error: "Kein Zugriff" });
+  const { month } = req.query as Record<string, string>;
+  try {
+    const where: Record<string, unknown> = {};
+    if (month) {
+      const [y, m] = month.split("-").map(Number);
+      where.date = { gte: new Date(y, m - 1, 1), lt: new Date(y, m, 1) };
+    }
+    const avails = await prisma.availability.findMany({
+      where,
+      include: { user: { select: { id: true, firstName: true, lastName: true } } },
+      orderBy: [{ date: "asc" }, { userId: "asc" }],
+    });
+    return res.json(avails);
+  } catch (err) { console.error(err); return res.status(500).json({ error: "Serverfehler" }); }
+});
+
 // GET /api/availability
 router.get("/", async (req: AuthRequest, res: Response) => {
   const { userId, month } = req.query as Record<string, string>;
