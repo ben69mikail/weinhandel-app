@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { useShifts, useUsers, useCreateShift, useUpdateShift, useDeleteShift, useAssignShift, useUpdateAssignmentStatus, Shift } from "@/hooks/useApi";
+import { useShifts, useUsers, useCreateShift, useUpdateShift, useDeleteShift, useAssignShift, useUpdateAssignmentStatus, useAllAvailability, Shift } from "@/hooks/useApi";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Avatar } from "@/components/ui/Avatar";
-import { ChevronLeft, ChevronRight, Plus, X, Trash2, Eye, Users } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, X, Trash2, Eye, Users, CalendarCheck } from "lucide-react";
 
 // --- helpers ---
 function getWeekDates(year: number, week: number): Date[] {
@@ -33,9 +33,14 @@ export default function Plan() {
   const [form, setForm] = useState({ ...emptyShift });
   const [editingId, setEditingId] = useState<string | null>(null);
 
+  const [availDay, setAvailDay] = useState<Date | null>(null);
   const weekStr = `${year}-W${String(week).padStart(2, "0")}`;
+  // month for availability (take first day of the week's month)
+  const firstDayOfWeek = (() => { const jan4 = new Date(year, 0, 4); return new Date(jan4.getTime() - ((jan4.getDay() || 7) - 1) * 86400000 + (week - 1) * 7 * 86400000); })();
+  const availMonthStr = `${firstDayOfWeek.getFullYear()}-${String(firstDayOfWeek.getMonth() + 1).padStart(2, "0")}`;
   const { data: shifts = [], isLoading } = useShifts({ week: weekStr });
   const { data: users = [] } = useUsers();
+  const { data: allAvails = [] } = useAllAvailability(availMonthStr);
   const createShift = useCreateShift();
   const updateShift = useUpdateShift();
   const deleteShift = useDeleteShift();
@@ -102,14 +107,24 @@ export default function Plan() {
           {/* Day headers */}
           <div className="grid grid-cols-8 border-b border-gray-200">
             <div className="px-3 py-2 text-xs font-medium text-gray-400">Mitarbeiter</div>
-            {days.map((d, i) => (
-              <div key={i} className="px-3 py-2 text-xs font-medium text-gray-600 border-l border-gray-100">
-                <div>{DAY_NAMES[i]}</div>
+            {days.map((d, i) => {
+              const dayAvails = allAvails.filter((a) => {
+                const ad = new Date(a.date);
+                return ad.getFullYear() === d.getFullYear() && ad.getMonth() === d.getMonth() && ad.getDate() === d.getDate();
+              });
+              return (
+              <div key={i} onClick={() => dayAvails.length > 0 && setAvailDay(d)}
+                className={`px-3 py-2 text-xs font-medium text-gray-600 border-l border-gray-100 ${dayAvails.length > 0 ? "cursor-pointer hover:bg-green-50" : ""}`}>
+                <div className="flex items-center gap-1">
+                  {DAY_NAMES[i]}
+                  {dayAvails.length > 0 && <span className="text-[10px] bg-green-100 text-green-700 rounded px-1">{dayAvails.length}</span>}
+                </div>
                 <div className={`text-base font-bold mt-0.5 ${isSameDay(d, now) ? "text-[#8B1A1A]" : "text-gray-800"}`}>
                   {d.getDate()}.{d.getMonth() + 1}.
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* Employee rows */}
@@ -241,6 +256,48 @@ export default function Plan() {
               <Button variant="danger" className="w-full" size="sm" onClick={() => handleDelete(selectedShift.id)}>
                 <Trash2 size={14} /> Löschen
               </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Availability Day Overlay */}
+      {availDay && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30" onClick={() => setAvailDay(null)}>
+          <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="border-b border-gray-200 px-5 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <CalendarCheck size={16} className="text-green-600" />
+                <h3 className="font-semibold text-gray-800">
+                  Verfügbarkeit — {availDay.toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "long" })}
+                </h3>
+              </div>
+              <button onClick={() => setAvailDay(null)} className="p-1.5 hover:bg-gray-100 rounded-lg"><X size={16} /></button>
+            </div>
+            <div className="p-4 space-y-2 max-h-80 overflow-y-auto">
+              {(() => {
+                const dayAvails = allAvails.filter((a) => {
+                  const ad = new Date(a.date);
+                  return ad.getFullYear() === availDay.getFullYear() && ad.getMonth() === availDay.getMonth() && ad.getDate() === availDay.getDate();
+                });
+                if (dayAvails.length === 0) return <p className="text-sm text-gray-400 text-center py-4">Keine Einträge</p>;
+                return dayAvails.map((a) => (
+                  <div key={a.id} className="flex items-center gap-3 py-2 border-b border-gray-100 last:border-0">
+                    <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${a.type === "AVAILABLE" ? "bg-green-500" : "bg-red-500"}`} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-800">{a.user.firstName} {a.user.lastName}</p>
+                      {a.startTime && a.endTime && (
+                        <p className="text-xs text-gray-500">{a.startTime} – {a.endTime}</p>
+                      )}
+                      {a.note && <p className="text-xs text-gray-400 truncate">{a.note}</p>}
+                    </div>
+                    <Badge
+                      label={a.type === "AVAILABLE" ? "Verfügbar" : "Nicht da"}
+                      color={a.type === "AVAILABLE" ? "green" : "red"}
+                    />
+                  </div>
+                ));
+              })()}
             </div>
           </div>
         </div>

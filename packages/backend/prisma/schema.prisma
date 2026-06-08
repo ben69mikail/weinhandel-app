@@ -108,6 +108,8 @@ model Availability {
   userId    String
   date      DateTime
   type      AvailabilityType
+  startTime String?
+  endTime   String?
   note      String?
   createdAt DateTime         @default(now())
 

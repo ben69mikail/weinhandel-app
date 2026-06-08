@@ -161,7 +161,8 @@ export function useBreakEnd() {
 // --- Availability ---
 export interface Availability {
   id: string; userId: string; date: string;
-  type: "AVAILABLE" | "UNAVAILABLE" | "PREFERRED" | "PARTIAL"; note?: string;
+  type: "AVAILABLE" | "UNAVAILABLE" | "PREFERRED" | "PARTIAL";
+  startTime?: string; endTime?: string; note?: string;
 }
 
 export function useAvailability(month: string) {
@@ -174,7 +175,7 @@ export function useAvailability(month: string) {
 export function useSetAvailability() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: { date: string; type: string; note?: string }) =>
+    mutationFn: (data: { date: string; type: string; startTime?: string; endTime?: string; note?: string }) =>
       api.post("/availability", data).then((r) => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["availability"] }),
   });

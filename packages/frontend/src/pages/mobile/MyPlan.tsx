@@ -19,8 +19,6 @@ const TYPE_LABELS: Record<string, string> = { REGULAR: "Regulär", EVENT: "Event
 
 const AVAIL_TYPES = [
   { value: "AVAILABLE",   label: "Verfügbar",  bg: "bg-green-500" },
-  { value: "PREFERRED",   label: "Bevorzugt",  bg: "bg-blue-500" },
-  { value: "PARTIAL",     label: "Teilweise",  bg: "bg-amber-400" },
   { value: "UNAVAILABLE", label: "Nicht da",   bg: "bg-red-500" },
 ] as const;
 
@@ -197,6 +195,8 @@ function VerfuegbarkeitTab() {
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [pickerDay, setPickerDay] = useState<number | null>(null);
+  const [startTime, setStartTime] = useState("09:00");
+  const [endTime, setEndTime] = useState("17:00");
   const [note, setNote] = useState("");
   const monthStr = `${year}-${String(month).padStart(2, "0")}`;
   const { data: avails = [] } = useAvailability(monthStr);
@@ -208,12 +208,19 @@ function VerfuegbarkeitTab() {
   const availByDay = new Map(avails.map((a) => [new Date(a.date).getDate(), a]));
   const { last, startDay } = getMonthDates(year, month);
 
+  const openPicker = (day: number) => {
+    const existing = availByDay.get(day);
+    setPickerDay(day);
+    setStartTime(existing?.startTime ?? "09:00");
+    setEndTime(existing?.endTime ?? "17:00");
+    setNote(existing?.note ?? "");
+  };
+
   const handleSelect = async (type: string) => {
     if (!pickerDay) return;
     const date = `${year}-${String(month).padStart(2,"0")}-${String(pickerDay).padStart(2,"0")}`;
-    await setAvail.mutateAsync({ date, type, note: note || undefined });
+    await setAvail.mutateAsync({ date, type, startTime, endTime, note: note || undefined });
     setPickerDay(null);
-    setNote("");
   };
 
   return (
@@ -241,7 +248,7 @@ function VerfuegbarkeitTab() {
             const isPast = new Date(year, month-1, day) < new Date(now.getFullYear(), now.getMonth(), now.getDate());
             return (
               <button key={day} disabled={isPast}
-                onClick={() => { setPickerDay(day); setNote(""); }}
+                onClick={() => !isPast && openPicker(day)}
                 className={cn("aspect-square rounded-lg flex flex-col items-center justify-center text-sm transition-colors",
                   isPast ? "opacity-30 cursor-not-allowed" : "hover:bg-gray-100",
                   isToday ? "ring-2 ring-[#8B1A1A]" : "",
@@ -259,31 +266,53 @@ function VerfuegbarkeitTab() {
           <p className="font-medium text-gray-800">
             {new Date(year, month-1, pickerDay).toLocaleDateString("de-DE", { weekday:"long", day:"2-digit", month:"long" })}
           </p>
+
+          {/* Zeitraum */}
+          <div>
+            <p className="text-xs font-medium text-gray-500 mb-2">Verfügbar von – bis</p>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-xs text-gray-400 block mb-1">Von</label>
+                <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#8B1A1A]/30" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 block mb-1">Bis</label>
+                <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#8B1A1A]/30" />
+              </div>
+            </div>
+          </div>
+
+          {/* Status */}
           <div className="grid grid-cols-2 gap-2">
             {AVAIL_TYPES.map((t) => (
               <button key={t.value} onClick={() => handleSelect(t.value)}
+                disabled={setAvail.isPending}
                 className={cn("py-3 rounded-xl text-sm font-medium border-2 transition-colors",
                   availByDay.get(pickerDay!)?.type === t.value
-                    ? "border-current bg-gray-50"
+                    ? "border-current bg-gray-50 font-bold"
                     : "border-gray-200 text-gray-700 hover:border-gray-300")}>
                 <div className={cn("w-3 h-3 rounded-full mx-auto mb-1", t.bg)} />
                 {t.label}
               </button>
             ))}
           </div>
+
           <input value={note} onChange={(e) => setNote(e.target.value)}
             className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#8B1A1A]/30"
             placeholder="Notiz (optional)" />
         </div>
       )}
 
-      <div className="flex flex-wrap gap-3">
+      <div className="flex gap-4">
         {AVAIL_TYPES.map((t) => (
           <div key={t.value} className="flex items-center gap-1.5 text-xs text-gray-600">
             <div className={cn("w-2.5 h-2.5 rounded-full", t.bg)} />
             {t.label}
           </div>
         ))}
+        <p className="text-xs text-gray-400 ml-auto">Tippe auf Tag zum Eintragen</p>
       </div>
     </div>
   );

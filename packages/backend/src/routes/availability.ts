@@ -9,6 +9,8 @@ router.use(authenticate);
 const availSchema = z.object({
   date: z.string(),
   type: z.enum(["AVAILABLE","UNAVAILABLE","PREFERRED","PARTIAL"]),
+  startTime: z.string().optional(),
+  endTime: z.string().optional(),
   note: z.string().optional(),
 });
 
@@ -50,12 +52,12 @@ router.get("/", async (req: AuthRequest, res: Response) => {
 router.post("/", async (req: AuthRequest, res: Response) => {
   const parsed = availSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
-  const { date, ...rest } = parsed.data;
+  const { date, type, startTime, endTime, note } = parsed.data;
   try {
     const avail = await prisma.availability.upsert({
       where: { userId_date: { userId: req.user!.id, date: new Date(date) } },
-      update: rest,
-      create: { userId: req.user!.id, date: new Date(date), ...rest },
+      update: { type, startTime: startTime ?? null, endTime: endTime ?? null, note: note ?? null },
+      create: { userId: req.user!.id, date: new Date(date), type, startTime, endTime, note },
     });
     return res.json(avail);
   } catch (err) { console.error(err); return res.status(500).json({ error: "Serverfehler" }); }
