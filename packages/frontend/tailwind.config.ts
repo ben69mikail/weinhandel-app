@@ -10,5 +10,11 @@ export default {
       }
     }
   },
+  safelist: [
+    "bg-green-700", "bg-green-800", "bg-green-900",
+    "border-green-700", "border-green-800",
+    "text-green-100", "text-green-200", "text-green-300",
+    "hover:bg-green-800", "hover:bg-green-900"
+  ],
   plugins: []
 };

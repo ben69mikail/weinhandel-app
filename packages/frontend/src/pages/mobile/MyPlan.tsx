@@ -146,37 +146,40 @@ function SchichtboerseTab() {
           const free = s.maxWorkers - s.assignments.length;
           return (
             <div key={s.id}
-              className={cn("rounded-2xl border overflow-hidden shadow-sm transition-colors",
-                applied ? "border-green-800 bg-green-900" : "border-gray-200 bg-white")}>
-              <div className="h-1.5" style={{ backgroundColor: applied ? "#14532d" : s.color }} />
+              className="rounded-2xl border overflow-hidden shadow-sm transition-colors"
+              style={applied ? { borderColor: "#166534", backgroundColor: "#14532d" } : {}}>
+              <div className="h-1.5" style={{ backgroundColor: applied ? "#166534" : s.color }} />
               <div className="p-4 space-y-3">
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <h3 className={cn("font-semibold", applied ? "text-white" : "text-gray-900")}>{s.title}</h3>
-                    <p className={cn("text-sm", applied ? "text-green-200" : "text-gray-500")}>
+                    <h3 className="font-semibold" style={{ color: applied ? "#fff" : "" }}>{s.title}</h3>
+                    <p className="text-sm" style={{ color: applied ? "#bbf7d0" : "#6b7280" }}>
                       {new Date(s.date).toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "long" })}
                     </p>
                   </div>
                   <Badge label={TYPE_LABELS[s.type] ?? s.type} color="wine" />
                 </div>
-                <div className={cn("flex flex-wrap gap-3 text-sm", applied ? "text-green-100" : "text-gray-600")}>
-                  <span className="flex items-center gap-1"><Clock size={14} className={applied ? "text-green-300" : "text-gray-400"} />{s.startTime}–{s.endTime}</span>
-                  <span className="flex items-center gap-1"><Users size={14} className={applied ? "text-green-300" : "text-gray-400"} />{free} Platz{free !== 1 ? "plätze" : ""} frei</span>
+                <div className="flex flex-wrap gap-3 text-sm" style={{ color: applied ? "#dcfce7" : "#4b5563" }}>
+                  <span className="flex items-center gap-1"><Clock size={14} style={{ color: applied ? "#86efac" : "#9ca3af" }} />{s.startTime}–{s.endTime}</span>
+                  <span className="flex items-center gap-1"><Users size={14} style={{ color: applied ? "#86efac" : "#9ca3af" }} />{free} Platz{free !== 1 ? "plätze" : ""} frei</span>
                 </div>
                 {s.requiredSkills.length > 0 && (
                   <div className="flex flex-wrap gap-1">
                     {s.requiredSkills.map((sk) => <Badge key={sk} label={sk} color="gray" />)}
                   </div>
                 )}
-                <Button
+                <button
                   onClick={() => !applied && apply.mutate(s.id)}
                   disabled={applied || apply.isPending || free <= 0}
-                  variant={applied ? "secondary" : "primary"}
-                  className={cn("w-full justify-center", applied ? "!bg-green-700 !text-white !border-green-700" : "")}
-                  size="sm"
+                  className="w-full py-2 px-4 rounded-xl text-sm font-semibold transition-colors"
+                  style={applied
+                    ? { backgroundColor: "#166534", color: "#fff", cursor: "default" }
+                    : free <= 0
+                      ? { backgroundColor: "#e5e7eb", color: "#9ca3af", cursor: "not-allowed" }
+                      : { backgroundColor: "#8B1A1A", color: "#fff" }}
                 >
                   {applied ? "✓ Beworben" : free <= 0 ? "Ausgebucht" : "Jetzt bewerben"}
-                </Button>
+                </button>
               </div>
             </div>
           );

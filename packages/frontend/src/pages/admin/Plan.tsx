@@ -117,7 +117,8 @@ export default function Plan() {
                   </div>
                   <div className="flex items-center gap-1.5 mt-1">
                     {dayAvailCount > 0 && (
-                      <span className="flex items-center gap-0.5 text-[10px] text-white bg-green-800 rounded px-1 py-0.5 font-semibold">
+                      <span className="flex items-center gap-0.5 text-[10px] text-white rounded px-1 py-0.5 font-semibold"
+                        style={{ backgroundColor: "#166534" }}>
                         {dayAvailCount} verfügbar
                       </span>
                     )}
@@ -142,13 +143,14 @@ export default function Plan() {
 
                 return (
                   <div key={i}
-                    className={`border-l border-gray-100 p-1 min-h-[64px] cursor-pointer group relative transition-colors
-                      ${isAvailable ? "bg-green-50/40 hover:bg-green-50" : "hover:bg-gray-50"}`}
+                    className="border-l border-gray-100 p-1 min-h-[64px] cursor-pointer group relative transition-colors hover:bg-gray-50"
+                    style={isAvailable ? { backgroundColor: "rgba(20,83,45,0.06)" } : {}}
                     onClick={() => openCreate(d)}>
 
                     {/* Availability: dunkelgrün mit Zeit */}
                     {isAvailable && (
-                      <div className="text-[10px] font-semibold rounded px-1 py-0.5 mb-0.5 flex items-center gap-0.5 w-fit text-white bg-green-800">
+                      <div className="text-[10px] font-semibold rounded px-1 py-0.5 mb-0.5 flex items-center gap-0.5 w-fit text-white"
+                        style={{ backgroundColor: "#166534" }}>
                         {avail!.startTime && avail!.endTime ? `${avail!.startTime}–${avail!.endTime}` : "Verfügbar"}
                       </div>
                     )}
@@ -157,7 +159,8 @@ export default function Plan() {
                     {appliedShifts.map((s) => (
                       <div key={s.id}
                         onClick={(e) => { e.stopPropagation(); setSelectedShift(s); }}
-                        className="text-[10px] font-semibold rounded px-1 py-0.5 mb-0.5 flex items-center gap-0.5 w-fit text-white bg-green-700 cursor-pointer hover:bg-green-800">
+                        className="text-[10px] font-semibold rounded px-1 py-0.5 mb-0.5 flex items-center gap-0.5 w-fit text-white cursor-pointer"
+                        style={{ backgroundColor: "#15803d" }}>
                         📋 {s.startTime}–{s.endTime}
                       </div>
                     ))}
@@ -209,16 +212,17 @@ export default function Plan() {
           </div>
 
           {/* Verfügbar-Zusammenfassung */}
-          <div className="grid grid-cols-8 bg-green-900/5 min-h-[40px]">
-            <div className="px-3 py-2 flex items-center text-xs text-green-900 border-r border-gray-100 font-semibold gap-1">
-              <span className="w-2 h-2 rounded-full bg-green-800 inline-block" /> Verfügbar
+          <div className="grid grid-cols-8 min-h-[40px]" style={{ backgroundColor: "rgba(20,83,45,0.04)" }}>
+            <div className="px-3 py-2 flex items-center text-xs border-r border-gray-100 font-semibold gap-1" style={{ color: "#14532d" }}>
+              <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: "#166534" }} /> Verfügbar
             </div>
             {days.map((d, i) => {
               const avails = allAvails.filter((a) => isSameDay(new Date(a.date), d) && a.type === "AVAILABLE");
               return (
                 <div key={i} className="border-l border-gray-100 p-1 flex flex-col gap-0.5">
                   {avails.map((a) => (
-                    <div key={a.id} className="text-[10px] font-semibold text-white bg-green-800 rounded px-1 py-0.5 truncate">
+                    <div key={a.id} className="text-[10px] font-semibold text-white rounded px-1 py-0.5 truncate"
+                      style={{ backgroundColor: "#166534" }}>
                       {a.user.firstName} {a.startTime ? `${a.startTime}–${a.endTime}` : ""}
                     </div>
                   ))}
