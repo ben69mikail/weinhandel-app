@@ -6,7 +6,10 @@
     "outDir": "dist",
     "rootDir": "src",
     "declaration": true,
-    "noImplicitAny": false
+    "noImplicitAny": false,
+    "paths": {
+      "@weinhandel/types": ["../types/src/index.ts"]
+    }
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]

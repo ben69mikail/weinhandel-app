@@ -1,9 +1,10 @@
 import { Router, Response } from "express";
-import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { authenticate, AuthRequest } from "../middleware/auth.js";
 import { adminOnly } from "../middleware/adminOnly.js";
 import { io } from "../index.js";
+import { TimeService } from "../services/TimeService.js";
+import { ERRORS } from "../lib/errors.js";
 
 const router = Router();
 router.use(authenticate);
@@ -11,86 +12,55 @@ router.use(authenticate);
 // POST /api/time/clock-in
 router.post("/clock-in", async (req: AuthRequest, res: Response) => {
   try {
-    const active = await prisma.timeEntry.findFirst({
-      where: { userId: req.user!.id, clockOut: null },
-    });
-    if (active) return res.status(409).json({ error: "Bereits eingestempelt" });
-
-    const entry = await prisma.timeEntry.create({
-      data: { userId: req.user!.id, shiftId: req.body.shiftId ?? null, clockIn: new Date() },
-    });
+    const entry = await TimeService.clockIn(req.user!.id, req.body.shiftId);
     io.emit("clockIn", { userId: req.user!.id, entryId: entry.id });
     return res.status(201).json(entry);
-  } catch (err) { console.error(err); return res.status(500).json({ error: "Serverfehler" }); }
+  } catch (err: any) {
+    if (err?.code === "CLOCK_ALREADY_IN") return res.status(409).json(err);
+    console.error(err); return res.status(500).json(ERRORS.INTERNAL);
+  }
 });
 
 // POST /api/time/clock-out
 router.post("/clock-out", async (req: AuthRequest, res: Response) => {
   try {
-    const entry = await prisma.timeEntry.findFirst({
-      where: { userId: req.user!.id, clockOut: null },
-    });
-    if (!entry) return res.status(404).json({ error: "Nicht eingestempelt" });
-
-    const clockOut = new Date();
-    const totalMs = clockOut.getTime() - entry.clockIn.getTime();
-    const totalMinutes = totalMs / 60000;
-    const breakMinutes = entry.breakMinutes ?? 0;
-    const netMinutes = totalMinutes - breakMinutes;
-
-    const updated = await prisma.timeEntry.update({
-      where: { id: entry.id },
-      data: { clockOut, totalMinutes, netMinutes },
-    });
+    const updated = await TimeService.clockOut(req.user!.id);
     io.emit("clockOut", { userId: req.user!.id });
     return res.json(updated);
-  } catch (err) { console.error(err); return res.status(500).json({ error: "Serverfehler" }); }
+  } catch (err: any) {
+    if (err?.code === "CLOCK_NOT_IN") return res.status(404).json(err);
+    console.error(err); return res.status(500).json(ERRORS.INTERNAL);
+  }
 });
 
 // POST /api/time/break-start
 router.post("/break-start", async (req: AuthRequest, res: Response) => {
   try {
-    const entry = await prisma.timeEntry.findFirst({
-      where: { userId: req.user!.id, clockOut: null },
-    });
-    if (!entry) return res.status(404).json({ error: "Nicht eingestempelt" });
-    if (entry.breakStart && !entry.breakEnd) return res.status(409).json({ error: "Pause läuft bereits" });
-
-    const updated = await prisma.timeEntry.update({
-      where: { id: entry.id },
-      data: { breakStart: new Date(), breakEnd: null },
-    });
+    const updated = await TimeService.breakStart(req.user!.id);
     return res.json(updated);
-  } catch (err) { console.error(err); return res.status(500).json({ error: "Serverfehler" }); }
+  } catch (err: any) {
+    if (err?.code) return res.status(err.code === "CLOCK_NOT_IN" ? 404 : 409).json(err);
+    console.error(err); return res.status(500).json(ERRORS.INTERNAL);
+  }
 });
 
 // POST /api/time/break-end
 router.post("/break-end", async (req: AuthRequest, res: Response) => {
   try {
-    const entry = await prisma.timeEntry.findFirst({
-      where: { userId: req.user!.id, clockOut: null, breakStart: { not: null } },
-    });
-    if (!entry || !entry.breakStart) return res.status(404).json({ error: "Keine aktive Pause" });
-
-    const breakEnd = new Date();
-    const addedBreak = (breakEnd.getTime() - entry.breakStart.getTime()) / 60000;
-    const updated = await prisma.timeEntry.update({
-      where: { id: entry.id },
-      data: { breakEnd, breakMinutes: (entry.breakMinutes ?? 0) + Math.round(addedBreak) },
-    });
+    const updated = await TimeService.breakEnd(req.user!.id);
     return res.json(updated);
-  } catch (err) { console.error(err); return res.status(500).json({ error: "Serverfehler" }); }
+  } catch (err: any) {
+    if (err?.code) return res.status(404).json(err);
+    console.error(err); return res.status(500).json(ERRORS.INTERNAL);
+  }
 });
 
 // GET /api/time/current
 router.get("/current", async (req: AuthRequest, res: Response) => {
   try {
-    const entry = await prisma.timeEntry.findFirst({
-      where: { userId: req.user!.id, clockOut: null },
-      orderBy: { clockIn: "desc" },
-    });
+    const entry = await TimeService.getCurrent(req.user!.id);
     return res.json(entry ?? null);
-  } catch (err) { console.error(err); return res.status(500).json({ error: "Serverfehler" }); }
+  } catch (err) { console.error(err); return res.status(500).json(ERRORS.INTERNAL); }
 });
 
 // GET /api/time/active (Admin — wer ist eingestempelt?)
@@ -102,7 +72,7 @@ router.get("/active", adminOnly, async (_req: AuthRequest, res: Response) => {
       orderBy: { clockIn: "asc" },
     });
     return res.json(entries);
-  } catch (err) { console.error(err); return res.status(500).json({ error: "Serverfehler" }); }
+  } catch (err) { console.error(err); return res.status(500).json(ERRORS.INTERNAL); }
 });
 
 // GET /api/time/entries
@@ -117,7 +87,7 @@ router.get("/entries", async (req: AuthRequest, res: Response) => {
     }
     const entries = await prisma.timeEntry.findMany({ where, orderBy: { clockIn: "desc" } });
     return res.json(entries);
-  } catch (err) { console.error(err); return res.status(500).json({ error: "Serverfehler" }); }
+  } catch (err) { console.error(err); return res.status(500).json(ERRORS.INTERNAL); }
 });
 
 export default router;

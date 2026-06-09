@@ -3,6 +3,8 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { authenticate, AuthRequest } from "../middleware/auth.js";
 import { adminOnly } from "../middleware/adminOnly.js";
+import { ShiftService } from "../services/ShiftService.js";
+import { ERRORS } from "../lib/errors.js";
 
 const router = Router();
 router.use(authenticate);
@@ -134,41 +136,38 @@ router.put("/:id/publish", adminOnly, async (req: AuthRequest, res: Response) =>
 // POST /api/shifts/:id/assign (Admin)
 router.post("/:id/assign", adminOnly, async (req: AuthRequest, res: Response) => {
   const { userId } = req.body;
-  if (!userId) return res.status(400).json({ error: "userId fehlt" });
+  if (!userId) return res.status(400).json(ERRORS.NOT_FOUND);
   try {
-    const assignment = await prisma.shiftAssignment.upsert({
-      where: { shiftId_userId: { shiftId: req.params.id, userId } },
-      update: { status: "ASSIGNED" },
-      create: { shiftId: req.params.id, userId, status: "ASSIGNED" },
-    });
+    const assignment = await ShiftService.assign(req.params.id, userId);
     return res.json(assignment);
-  } catch (err) { console.error(err); return res.status(500).json({ error: "Serverfehler" }); }
+  } catch (err: any) {
+    if (err?.code) return res.status(err.code === "NOT_FOUND" ? 404 : 409).json(err);
+    console.error(err); return res.status(500).json(ERRORS.INTERNAL);
+  }
 });
 
 // POST /api/shifts/:id/apply (Employee)
 router.post("/:id/apply", async (req: AuthRequest, res: Response) => {
   try {
-    const assignment = await prisma.shiftAssignment.upsert({
-      where: { shiftId_userId: { shiftId: req.params.id, userId: req.user!.id } },
-      update: { status: "APPLIED" },
-      create: { shiftId: req.params.id, userId: req.user!.id, status: "APPLIED" },
-    });
+    const assignment = await ShiftService.apply(req.params.id, req.user!.id);
     return res.json(assignment);
-  } catch (err) { console.error(err); return res.status(500).json({ error: "Serverfehler" }); }
+  } catch (err: any) {
+    if (err?.code) return res.status(err.code === "NOT_FOUND" ? 404 : 409).json(err);
+    console.error(err); return res.status(500).json(ERRORS.INTERNAL);
+  }
 });
 
 // PUT /api/shifts/:id/assignments/:assignmentId (Admin — approve/reject applicant)
 router.put("/:id/assignments/:assignmentId", adminOnly, async (req: AuthRequest, res: Response) => {
   const { status } = req.body as { status: string };
-  if (!["APPROVED", "REJECTED"].includes(status)) return res.status(400).json({ error: "Ungültiger Status" });
+  if (!["APPROVED", "REJECTED"].includes(status))
+    return res.status(400).json({ code: "VALIDATION_ERROR", message: "Ungültiger Status" });
   try {
-    const assignment = await prisma.shiftAssignment.update({
-      where: { id: req.params.assignmentId },
-      data: { status: status as "APPROVED" | "REJECTED" },
-      include: { user: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } } },
-    });
+    const assignment = await ShiftService.updateAssignmentStatus(
+      req.params.assignmentId, status as "APPROVED" | "REJECTED"
+    );
     return res.json(assignment);
-  } catch (err) { console.error(err); return res.status(500).json({ error: "Serverfehler" }); }
+  } catch (err) { console.error(err); return res.status(500).json(ERRORS.INTERNAL); }
 });
 
 export default router;

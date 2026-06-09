@@ -10,7 +10,8 @@
     "noEmit": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["src/*"],
+      "@weinhandel/types": ["../types/src/index.ts"]
     },
     "types": ["vite/client"]
   },

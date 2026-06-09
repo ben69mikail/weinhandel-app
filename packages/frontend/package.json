@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@weinhandel/types": "*",
     "@tanstack/react-query": "^5.40.0",
     "axios": "^1.7.2",
     "class-variance-authority": "^0.7.0",
