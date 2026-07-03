@@ -115,7 +115,10 @@ router.put("/:id", async (req: AuthRequest, res: Response) => {
   try {
     const updateData: Record<string, unknown> = { ...data };
     if (birthday) updateData.birthday = new Date(birthday);
-    if (password) updateData.passwordHash = await bcrypt.hash(password, 10);
+    if (password) {
+      updateData.passwordHash = await bcrypt.hash(password, 10);
+      updateData.tokenVersion = { increment: 1 }; // alte Tokens widerrufen
+    }
     if (!isAdmin) { delete updateData.role; delete updateData.employeeType; delete updateData.isActive; }
 
     const user = await prisma.user.update({ where: { id: req.params.id }, data: updateData });
@@ -127,7 +130,10 @@ router.put("/:id", async (req: AuthRequest, res: Response) => {
 // DELETE /api/users/:id (Admin — soft delete)
 router.delete("/:id", adminOnly, async (req: AuthRequest, res: Response) => {
   try {
-    await prisma.user.update({ where: { id: req.params.id }, data: { isActive: false } });
+    await prisma.user.update({
+      where: { id: req.params.id },
+      data: { isActive: false, tokenVersion: { increment: 1 } },
+    });
     return res.json({ message: "Deaktiviert" });
   } catch (err) { console.error(err); return res.status(500).json({ error: "Serverfehler" }); }
 });

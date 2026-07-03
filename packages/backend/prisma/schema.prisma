@@ -23,6 +23,7 @@ model User {
   avatarUrl        String?
   personnelNumber  String?
   isActive         Boolean      @default(true)
+  tokenVersion     Int          @default(0)
   pushSubscription String?
   tempAdminUntil   DateTime?
   createdAt        DateTime     @default(now())

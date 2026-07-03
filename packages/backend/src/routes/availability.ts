@@ -84,6 +84,11 @@ router.post("/bulk", async (req: AuthRequest, res: Response) => {
 // DELETE /api/availability/:id
 router.delete("/:id", async (req: AuthRequest, res: Response) => {
   try {
+    const avail = await prisma.availability.findUnique({ where: { id: req.params.id } });
+    if (!avail) return res.status(404).json({ code: "NOT_FOUND", message: "Nicht gefunden" });
+    // Nur Besitzer oder Admin darf löschen
+    if (avail.userId !== req.user!.id && req.user!.role !== "ADMIN")
+      return res.status(403).json({ code: "FORBIDDEN", message: "Kein Zugriff" });
     await prisma.availability.delete({ where: { id: req.params.id } });
     return res.json({ message: "Gelöscht" });
   } catch (err) { console.error(err); return res.status(500).json({ error: "Serverfehler" }); }

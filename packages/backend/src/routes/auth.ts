@@ -2,10 +2,20 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { z } from "zod";
+import rateLimit from "express-rate-limit";
 import { prisma } from "../lib/prisma.js";
 import { authenticate, AuthRequest } from "../middleware/auth.js";
 
 const router = Router();
+
+// Brute-Force-Schutz: max. 10 Login-Versuche pro IP in 15 Minuten
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { code: "RATE_LIMITED", message: "Zu viele Login-Versuche. Bitte in 15 Minuten erneut versuchen." },
+});
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -17,7 +27,7 @@ const changePasswordSchema = z.object({
   newPassword: z.string().min(8),
 });
 
-router.post("/login", async (req: Request, res: Response) => {
+router.post("/login", loginLimiter, async (req: Request, res: Response) => {
   const parsed = loginSchema.safeParse(req.body);
   if (!parsed.success)
     return res.status(400).json({ error: "Ungültige Eingabe" });
@@ -37,9 +47,9 @@ router.post("/login", async (req: Request, res: Response) => {
       return res.status(401).json({ error: "E-Mail oder Passwort falsch" });
 
     const token = jwt.sign(
-      { id: user.id, role: user.role, email: user.email },
+      { id: user.id, role: user.role, email: user.email, tokenVersion: user.tokenVersion },
       process.env.JWT_SECRET!,
-      { expiresIn: process.env.JWT_EXPIRES_IN ?? "7d" } as jwt.SignOptions
+      { expiresIn: process.env.JWT_EXPIRES_IN ?? "24h" } as jwt.SignOptions
     );
 
     return res.json({
@@ -113,12 +123,20 @@ router.post(
         return res.status(401).json({ error: "Aktuelles Passwort falsch" });
 
       const hash = await bcrypt.hash(newPassword, 10);
-      await prisma.user.update({
+      // tokenVersion hochzählen → alle bestehenden Tokens sofort ungültig
+      const updated = await prisma.user.update({
         where: { id: user.id },
-        data: { passwordHash: hash },
+        data: { passwordHash: hash, tokenVersion: { increment: 1 } },
       });
 
-      return res.json({ message: "Passwort geändert" });
+      // Neues Token ausstellen, damit der Nutzer eingeloggt bleibt
+      const token = jwt.sign(
+        { id: updated.id, role: updated.role, email: updated.email, tokenVersion: updated.tokenVersion },
+        process.env.JWT_SECRET!,
+        { expiresIn: process.env.JWT_EXPIRES_IN ?? "24h" } as jwt.SignOptions
+      );
+
+      return res.json({ message: "Passwort geändert", token });
     } catch (err) {
       console.error(err);
       return res.status(500).json({ error: "Serverfehler" });
