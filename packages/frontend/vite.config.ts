@@ -26,7 +26,12 @@ export default defineConfig({
       workbox: { globPatterns: ["**/*.{js,css,html,ico,png,svg}"] }
     })
   ],
-  resolve: { alias: { "@": path.resolve(__dirname, "./src") } },
+  resolve: {
+    alias: {
+      "@": path.resolve(__dirname, "./src"),
+      "@weinhandel/types": path.resolve(__dirname, "../types/src/index.ts"),
+    },
+  },
   server: {
     port: 5173,
     proxy: {
