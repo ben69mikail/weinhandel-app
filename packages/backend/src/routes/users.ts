@@ -28,17 +28,23 @@ const updateUserSchema = createUserSchema.partial().omit({ password: true }).ext
   isActive: z.boolean().optional(),
 });
 
-// GET /api/users
-router.get("/", async (_req: AuthRequest, res: Response) => {
+// GET /api/users — Admin: alle Felder; Mitarbeiter: nur Basisdaten (Datenschutz)
+router.get("/", async (req: AuthRequest, res: Response) => {
+  const isAdmin = req.user?.role === "ADMIN";
   try {
     const users = await prisma.user.findMany({
       where: { isActive: true },
-      select: {
-        id: true, email: true, firstName: true, lastName: true,
-        phone: true, role: true, employeeType: true, monthlyHours: true,
-        skills: true, avatarUrl: true, personnelNumber: true,
-        isActive: true, birthday: true, createdAt: true,
-      },
+      select: isAdmin
+        ? {
+            id: true, email: true, firstName: true, lastName: true,
+            phone: true, role: true, employeeType: true, monthlyHours: true,
+            skills: true, avatarUrl: true, personnelNumber: true,
+            isActive: true, birthday: true, createdAt: true,
+          }
+        : {
+            id: true, firstName: true, lastName: true,
+            role: true, skills: true, avatarUrl: true, isActive: true,
+          },
       orderBy: { firstName: "asc" },
     });
     return res.json(users);
@@ -65,8 +71,10 @@ router.get("/birthdays", async (req: AuthRequest, res: Response) => {
   } catch (err) { console.error(err); return res.status(500).json({ error: "Serverfehler" }); }
 });
 
-// GET /api/users/:id
+// GET /api/users/:id — nur eigenes Profil oder Admin (enthält Adresse etc.)
 router.get("/:id", async (req: AuthRequest, res: Response) => {
+  if (req.user?.role !== "ADMIN" && req.user?.id !== req.params.id)
+    return res.status(403).json({ code: "FORBIDDEN", message: "Kein Zugriff" });
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.params.id },

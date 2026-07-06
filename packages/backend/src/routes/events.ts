@@ -8,6 +8,8 @@ router.get("/", async (req, res) => {
   try {
     const { from, to } = req.query as Record<string,string>;
     const where: Record<string,unknown> = {};
+    // Nicht-Admins sehen nur öffentliche Events
+    if ((req as any).user.role !== "ADMIN") where.isPublic = true;
     if (from || to) { where.date = {}; if (from) (where.date as any).gte = new Date(from); if (to) (where.date as any).lte = new Date(to); }
     const ev = await prisma.event.findMany({ where, orderBy: { date:"asc" } });
     res.json(ev);

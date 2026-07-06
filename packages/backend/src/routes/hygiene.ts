@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { prisma } from "../lib/prisma.js";
 import { authenticate } from "../middleware/auth.js";
+import { adminOnly } from "../middleware/adminOnly.js";
 const router = Router();
 router.use(authenticate);
 const CURRENT_VERSION = "2025-01";
@@ -19,7 +20,7 @@ router.post("/confirm", async (req, res) => {
     res.status(201).json({ ok:true, confirmedAt: c.confirmedAt });
   } catch { res.status(500).json({ error:"Server error" }); }
 });
-router.get("/all", async (_req, res) => {
+router.get("/all", adminOnly, async (_req, res) => {
   try {
     const list = await prisma.hygieneConfirmation.findMany({ where: { version: CURRENT_VERSION }, include: { user: { select: { id:true, firstName:true, lastName:true } } } });
     res.json(list);
