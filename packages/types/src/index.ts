@@ -156,6 +156,9 @@ export interface Document {
   category: string;
   content?: string;
   fileUrl?: string;
+  fileName?: string;
+  mimeType?: string;
+  fileSize?: number;
   isPublished: boolean;
   sortOrder: number;
   createdAt: string;

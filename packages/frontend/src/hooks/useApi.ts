@@ -59,6 +59,7 @@ export {
 // Document hooks
 export {
   useDocuments, useCreateDocument, useUpdateDocument, useDeleteDocument,
+  useUploadDocument, downloadDocument,
 } from "./useDocuments";
 
 // Event hooks

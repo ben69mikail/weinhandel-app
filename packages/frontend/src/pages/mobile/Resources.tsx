@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { useDocuments } from "@/hooks/useApi";
-import { BookOpen, Wine, UtensilsCrossed, CheckSquare, Shield, Calendar, Shirt, Phone, X, ChevronRight } from "lucide-react";
+import { useDocuments, downloadDocument } from "@/hooks/useApi";
+import { BookOpen, Wine, UtensilsCrossed, CheckSquare, Shield, Calendar, Shirt, Phone, X, ChevronRight, Download, FileText } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 const CATS = [
@@ -41,9 +41,13 @@ function DocViewer({ category, label, onClose }: { category: string; label: stri
         {isLoading && <p className="text-center text-gray-400 py-10">Lade…</p>}
         {!isLoading && docs.length === 0 && <p className="text-center text-gray-400 py-10">Noch keine Inhalte</p>}
         {docs.map((d) => (
-          <button key={d.id} onClick={() => setOpenDoc(d)} className="w-full bg-white rounded-xl border border-gray-200 p-4 flex items-center gap-3 text-left hover:shadow-sm active:scale-95 transition-all">
-            <span className="flex-1 font-medium text-gray-900">{d.title}</span>
-            <ChevronRight size={16} className="text-gray-400"/>
+          <button key={d.id} onClick={() => d.fileName ? downloadDocument(d.id, d.fileName) : setOpenDoc(d)} className="w-full bg-white rounded-xl border border-gray-200 p-4 flex items-center gap-3 text-left hover:shadow-sm active:scale-95 transition-all">
+            {d.fileName && <FileText size={18} className="text-[#8B1A1A] flex-shrink-0"/>}
+            <div className="flex-1 min-w-0">
+              <span className="font-medium text-gray-900 block truncate">{d.title}</span>
+              {d.fileName && <span className="text-xs text-gray-400">{d.fileName}{d.fileSize ? ` · ${(d.fileSize/1024/1024).toFixed(1)} MB` : ""}</span>}
+            </div>
+            {d.fileName ? <Download size={16} className="text-gray-400 flex-shrink-0"/> : <ChevronRight size={16} className="text-gray-400"/>}
           </button>
         ))}
       </div>

@@ -65,6 +65,7 @@ model Shift {
   notes          String?
   isPublished    Boolean   @default(false)
   isOpenShift    Boolean   @default(false)
+  isRecurring    Boolean   @default(false)
   requiredSkills String[]
   color          String    @default("#3B82F6")
   createdAt      DateTime  @default(now())
@@ -251,6 +252,8 @@ model Document {
   fileUrl     String?
   fileName    String?
   mimeType    String?
+  fileData    Bytes?
+  fileSize    Int?
   isPublished Boolean          @default(true)
   sortOrder   Int              @default(0)
   updatedAt   DateTime         @updatedAt

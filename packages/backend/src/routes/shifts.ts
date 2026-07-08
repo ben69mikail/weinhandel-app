@@ -4,6 +4,7 @@ import { prisma } from "../lib/prisma.js";
 import { authenticate, AuthRequest } from "../middleware/auth.js";
 import { adminOnly } from "../middleware/adminOnly.js";
 import { ShiftService } from "../services/ShiftService.js";
+import { generateRecurringDates } from "../services/recurrence.js";
 import { ERRORS } from "../lib/errors.js";
 
 const router = Router();
@@ -25,6 +26,10 @@ const shiftSchema = z.object({
   requiredSkills: z.array(z.string()).default([]),
   color: z.string().default("#8B1A1A"),
   assignUserIds: z.array(z.string()).optional(),
+  // Wiederholung: wenn recurring=true, an recurWeekdays (0=So..6=Sa) wöchentlich bis recurUntil
+  recurring: z.boolean().default(false),
+  recurWeekdays: z.array(z.number().int().min(0).max(6)).optional(),
+  recurUntil: z.string().optional(),
 });
 
 // GET /api/shifts
@@ -86,16 +91,28 @@ router.get("/:id", async (req: AuthRequest, res: Response) => {
 router.post("/", adminOnly, async (req: AuthRequest, res: Response) => {
   const parsed = shiftSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
-  const { assignUserIds, date, ...data } = parsed.data;
+  const { assignUserIds, date, recurring, recurWeekdays, recurUntil, ...data } = parsed.data;
+  const assignmentCreate = assignUserIds?.length
+    ? { create: assignUserIds.map((uid) => ({ userId: uid, status: "ASSIGNED" as const })) }
+    : undefined;
   try {
+    // Wiederkehrend: für jeden erzeugten Termin eine eigenständige Schicht anlegen
+    if (recurring && recurWeekdays?.length && recurUntil) {
+      const dates = generateRecurringDates(date, recurWeekdays, recurUntil);
+      if (dates.length === 0)
+        return res.status(400).json({ code: "VALIDATION_ERROR", message: "Keine Termine im gewählten Zeitraum" });
+      const created = await prisma.$transaction(
+        dates.map((d) =>
+          prisma.shift.create({
+            data: { ...data, isRecurring: true, date: new Date(d + "T00:00:00"), assignments: assignmentCreate },
+          })
+        )
+      );
+      return res.status(201).json({ count: created.length, shifts: created });
+    }
+
     const shift = await prisma.shift.create({
-      data: {
-        ...data,
-        date: new Date(date),
-        assignments: assignUserIds?.length
-          ? { create: assignUserIds.map((uid) => ({ userId: uid, status: "ASSIGNED" })) }
-          : undefined,
-      },
+      data: { ...data, date: new Date(date), assignments: assignmentCreate },
       include: { assignments: { include: { user: { select: { id: true, firstName: true, lastName: true } } } } },
     });
     return res.status(201).json(shift);
@@ -106,7 +123,8 @@ router.post("/", adminOnly, async (req: AuthRequest, res: Response) => {
 router.put("/:id", adminOnly, async (req: AuthRequest, res: Response) => {
   const parsed = shiftSchema.partial().safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
-  const { assignUserIds, date, ...data } = parsed.data;
+  // Wiederholung gilt nur beim Anlegen — beim Bearbeiten verwerfen (keine Shift-Spalten)
+  const { assignUserIds, date, recurring, recurWeekdays, recurUntil, ...data } = parsed.data;
   try {
     const shift = await prisma.shift.update({
       where: { id: req.params.id },

@@ -31,7 +31,13 @@ function parseAvailDate(dateStr: string): Date {
 }
 const DAY_NAMES = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 const TYPE_LABELS: Record<string, string> = { REGULAR: "Regulär", EVENT: "Event", TASTING: "Verkostung", CONCERT: "Konzert", HOLIDAY_COVERAGE: "Notfall" };
-const emptyShift = { title: "", date: "", startTime: "09:00", endTime: "17:00", location: "Weinhandel", type: "REGULAR", area: "Arbeitsbereich 1", maxWorkers: 2, minWorkers: 1, notes: "", isPublished: false, isOpenShift: false, requiredSkills: [] as string[], color: "#8B1A1A", assignUserIds: [] as string[] };
+const emptyShift = { title: "", date: "", startTime: "09:00", endTime: "17:00", location: "Weinhandel", type: "REGULAR", area: "Arbeitsbereich 1", maxWorkers: 2, minWorkers: 1, notes: "", isPublished: false, isOpenShift: false, requiredSkills: [] as string[], color: "#8B1A1A", assignUserIds: [] as string[], recurring: false, recurWeekdays: [] as number[], recurUntil: "" };
+
+// Wochentage für die Wiederholungs-Auswahl (value = Date.getDay(): 0=So..6=Sa)
+const WEEKDAYS = [
+  { value: 1, label: "Mo" }, { value: 2, label: "Di" }, { value: 3, label: "Mi" },
+  { value: 4, label: "Do" }, { value: 5, label: "Fr" }, { value: 6, label: "Sa" }, { value: 0, label: "So" },
+];
 
 export default function Plan() {
   const now = new Date();
@@ -465,6 +471,40 @@ export default function Plan() {
                   })}
                 </div>
               </div>
+
+              {!editingId && (
+                <div className="rounded-lg border border-gray-200 p-3 space-y-3">
+                  <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
+                    <input type="checkbox" checked={form.recurring} onChange={(e) => setForm((f) => ({ ...f, recurring: e.target.checked }))} />
+                    Schicht wiederholt sich wöchentlich
+                  </label>
+                  {form.recurring && (
+                    <div className="space-y-3 pl-6">
+                      <div>
+                        <label className="block text-xs text-gray-600 mb-1">An welchen Wochentagen?</label>
+                        <div className="flex flex-wrap gap-1.5">
+                          {WEEKDAYS.map((d) => {
+                            const active = form.recurWeekdays.includes(d.value);
+                            return (
+                              <button key={d.value} type="button"
+                                onClick={() => setForm((f) => ({ ...f, recurWeekdays: active ? f.recurWeekdays.filter((x) => x !== d.value) : [...f.recurWeekdays, d.value] }))}
+                                className={`w-10 h-9 rounded-lg text-sm font-medium border transition-colors ${active ? "bg-[#8B1A1A] text-white border-[#8B1A1A]" : "bg-white text-gray-600 border-gray-300 hover:border-gray-400"}`}>
+                                {d.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-600 mb-1">Wiederholen bis (Enddatum)</label>
+                        <input type="date" value={form.recurUntil} min={form.date} required={form.recurring}
+                          onChange={(e) => setForm((f) => ({ ...f, recurUntil: e.target.value }))}
+                          className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#8B1A1A]/30" />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="flex items-center gap-4">
                 <label className="flex items-center gap-2 text-sm cursor-pointer">
