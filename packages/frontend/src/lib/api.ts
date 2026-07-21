@@ -1,8 +1,8 @@
 import axios from "axios";
 
-const BASE_URL = import.meta.env.VITE_API_URL
-  ? `${import.meta.env.VITE_API_URL}/api`
-  : "/api";
+// Immer gleiche Domain: In Produktion leitet Netlify /api/* an die Function weiter,
+// im Dev-Modus leitet der Vite-Proxy /api an localhost:4000 weiter.
+const BASE_URL = "/api";
 
 export const api = axios.create({
   baseURL: BASE_URL,

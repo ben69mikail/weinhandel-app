@@ -1,6 +1,6 @@
 import cron from "node-cron";
 import { prisma } from "../lib/prisma.js";
-import { io } from "../index.js";
+import { io } from "../lib/realtime.js";
 import { sendMail } from "./mailer.js";
 
 // Every minute: check for auto-break (6h rule)

@@ -2,7 +2,7 @@ import { Router, Response } from "express";
 import { prisma } from "../lib/prisma.js";
 import { authenticate, AuthRequest } from "../middleware/auth.js";
 import { adminOnly } from "../middleware/adminOnly.js";
-import { io } from "../index.js";
+import { io } from "../lib/realtime.js";
 import { TimeService } from "../services/TimeService.js";
 import { ERRORS } from "../lib/errors.js";
 

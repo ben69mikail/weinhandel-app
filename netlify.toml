@@ -1,11 +1,27 @@
 [build]
-  base    = "packages/frontend"
-  command = "npm run build"
-  publish = "dist"
+  command   = "npm install && npm run generate --workspace=packages/backend && npm run build --workspace=packages/backend && npm run build --workspace=packages/frontend"
+  publish   = "packages/frontend/dist"
+  functions = "netlify/functions"
 
 [build.environment]
   NODE_VERSION = "20"
+  PRISMA_CLI_BINARY_TARGETS = "rhel-openssl-3.0.x"
 
+[functions]
+  node_bundler          = "esbuild"
+  external_node_modules = ["@prisma/client", ".prisma"]
+  included_files        = ["node_modules/.prisma/client/**", "packages/backend/prisma/schema.prisma"]
+
+# API als Netlify Function unter derselben Domain wie das Frontend.
+# Doppeltes /api ist Absicht: serverless-http entfernt den Function-Pfad (basePath),
+# übrig bleibt /api/... — genau das, was Express erwartet.
+[[redirects]]
+  from   = "/api/*"
+  to     = "/.netlify/functions/api/api/:splat"
+  status = 200
+  force  = true
+
+# SPA-Fallback
 [[redirects]]
   from   = "/*"
   to     = "/index.html"
