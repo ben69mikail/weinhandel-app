@@ -1,1 +1,5 @@
+# API vor dem SPA-Fallback, sonst schluckt /* die /api/-Routen.
+# Doppeltes /api ist Absicht: serverless-http entfernt den basePath.
+/api/*    /.netlify/functions/api/api/:splat    200!
+
 /*    /index.html   200
