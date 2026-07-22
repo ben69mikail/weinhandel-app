@@ -1,5 +1,8 @@
 [build]
-  command   = "npm install && npm run generate --workspace=packages/backend && npm run build --workspace=packages/backend && npm run build --workspace=packages/frontend"
+  # --include=dev ist zwingend: NODE_ENV=production (Runtime-Variable der Function)
+  # würde npm sonst die devDependencies überspringen lassen — tsc, vite und die
+  # Prisma-CLI fehlen dann und der Build bricht mit Exit-Code 2 ab.
+  command   = "npm install --include=dev && npm run generate --workspace=packages/backend && npm run build --workspace=packages/backend && npm run build --workspace=packages/frontend"
   publish   = "packages/frontend/dist"
   functions = "netlify/functions"
 
