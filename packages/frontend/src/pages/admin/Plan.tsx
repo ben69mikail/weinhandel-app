@@ -215,6 +215,27 @@ export default function Plan() {
             })}
           </div>
 
+          {/* Verfügbar-Zusammenfassung — ganz oben über den Mitarbeitern */}
+          <div className="grid grid-cols-8 border-b border-gray-200 min-h-[40px]" style={{ backgroundColor: "rgba(20,83,45,0.04)" }}>
+            <div className="px-3 py-2 flex items-center text-xs border-r border-gray-100 font-semibold gap-1" style={{ color: "#14532d" }}>
+              <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: "#166534" }} /> Verfügbar
+            </div>
+            {days.map((d, i) => {
+              const avails = allAvails.filter((a) => isSameDay(parseAvailDate(a.date), d) && a.type === "AVAILABLE");
+              return (
+                <div key={i} className="border-l border-gray-100 p-1 flex flex-col gap-0.5">
+                  {avails.map((a) => (
+                    <div key={a.id} className="text-[10px] font-semibold text-white rounded px-1 py-0.5 truncate"
+                      style={{ backgroundColor: "#166534" }}>
+                      {a.user.firstName} {a.startTime ? `${a.startTime}–${a.endTime}` : ""}
+                    </div>
+                  ))}
+                  {avails.length === 0 && <span className="text-[10px] text-gray-300">–</span>}
+                </div>
+              );
+            })}
+          </div>
+
           {/* Employee rows */}
           {users.map((u) => (
             <div key={u.id} className="grid grid-cols-8 border-b border-gray-100 min-h-[64px]">
@@ -274,26 +295,6 @@ export default function Plan() {
             </div>
           ))}
 
-          {/* Verfügbar-Zusammenfassung */}
-          <div className="grid grid-cols-8 min-h-[40px]" style={{ backgroundColor: "rgba(20,83,45,0.04)" }}>
-            <div className="px-3 py-2 flex items-center text-xs border-r border-gray-100 font-semibold gap-1" style={{ color: "#14532d" }}>
-              <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: "#166534" }} /> Verfügbar
-            </div>
-            {days.map((d, i) => {
-              const avails = allAvails.filter((a) => isSameDay(parseAvailDate(a.date), d) && a.type === "AVAILABLE");
-              return (
-                <div key={i} className="border-l border-gray-100 p-1 flex flex-col gap-0.5">
-                  {avails.map((a) => (
-                    <div key={a.id} className="text-[10px] font-semibold text-white rounded px-1 py-0.5 truncate"
-                      style={{ backgroundColor: "#166534" }}>
-                      {a.user.firstName} {a.startTime ? `${a.startTime}–${a.endTime}` : ""}
-                    </div>
-                  ))}
-                  {avails.length === 0 && <span className="text-[10px] text-gray-300">–</span>}
-                </div>
-              );
-            })}
-          </div>
         </div>
       )}
 
