@@ -36,21 +36,30 @@ export function useDeleteDocument() {
   });
 }
 
-// Datei-Upload (multipart) — nutzt dieselbe axios-Instanz (Token via Interceptor)
+// Datei als Base64 lesen (nur die Nutzdaten, ohne "data:...;base64,"-Präfix).
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      const comma = result.indexOf(",");
+      resolve(comma >= 0 ? result.slice(comma + 1) : result);
+    };
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+// Datei-Upload als Base64 im JSON-Body. Kein Multipart — die Netlify-Function
+// behandelt Multipart als UTF-8 und zerstört Binärdaten (PDF wurde weiß/kaputt).
 export function useUploadDocument() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ file, title, category }: { file: File; title: string; category: string }) => {
-      const fd = new FormData();
-      fd.append("file", file);
-      fd.append("title", title);
-      fd.append("category", category);
-      // WICHTIG: Content-Type NICHT selbst setzen. Der Default "application/json"
-      // der api-Instanz muss überschrieben werden (undefined), damit axios für die
-      // FormData automatisch "multipart/form-data; boundary=…" erzeugt — sonst
-      // fehlt die boundary und multer parst die Datei nicht.
+    mutationFn: async ({ file, title, category }: { file: File; title: string; category: string }) => {
+      const dataBase64 = await fileToBase64(file);
+      const mimeType = file.type || "application/octet-stream";
       return api
-        .post("/documents/upload", fd, { headers: { "Content-Type": undefined } })
+        .post("/documents/upload", { title, category, fileName: file.name, mimeType, dataBase64 })
         .then((r) => r.data);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["documents"] }),

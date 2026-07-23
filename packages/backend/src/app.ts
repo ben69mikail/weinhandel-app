@@ -44,7 +44,9 @@ export const app = express();
 app.set("trust proxy", 1);
 app.use(helmet());
 app.use(cors(corsOptions));
-app.use(express.json({ limit: "1mb" }));
+// 8mb: Datei-Uploads kommen als Base64 im JSON-Body (Multipart wird von der
+// Netlify-Function als UTF-8 behandelt und korrumpiert Binärdaten).
+app.use(express.json({ limit: "8mb" }));
 app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 
 // Globales Rate-Limit: 300 Requests pro Minute pro IP

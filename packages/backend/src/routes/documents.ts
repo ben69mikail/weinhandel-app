@@ -1,5 +1,4 @@
 import { Router } from "express";
-import multer from "multer";
 import { prisma } from "../lib/prisma.js";
 import { authenticate } from "../middleware/auth.js";
 import { adminOnly } from "../middleware/adminOnly.js";
@@ -8,45 +7,33 @@ import { isAllowedDocumentType, MAX_DOCUMENT_SIZE } from "../services/fileValida
 const router = Router();
 router.use(authenticate);
 
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: MAX_DOCUMENT_SIZE },
-  fileFilter: (_req, file, cb) => {
-    if (isAllowedDocumentType(file.mimetype)) cb(null, true);
-    else cb(new Error("UNSUPPORTED_TYPE"));
-  },
-});
-
-// POST /api/documents/upload — Datei (PDF/Word/Excel) hochladen (Admin)
-router.post("/upload", adminOnly, (req, res) => {
-  upload.single("file")(req, res, async (err) => {
-    if (err) {
-      const code = err.message === "UNSUPPORTED_TYPE" ? "UNSUPPORTED_TYPE" : "FILE_TOO_LARGE";
-      const message = code === "UNSUPPORTED_TYPE"
-        ? "Nur PDF-, Word- und Excel-Dateien erlaubt"
-        : "Datei zu groß (max. 10 MB)";
-      return res.status(400).json({ code, message });
-    }
-    const file = (req as any).file as Express.Multer.File | undefined;
-    const { title, category } = req.body as Record<string, string>;
-    if (!file) return res.status(400).json({ code: "VALIDATION_ERROR", message: "Keine Datei" });
-    if (!title || !category) return res.status(400).json({ code: "VALIDATION_ERROR", message: "Titel/Kategorie fehlt" });
-    try {
-      // multer/busboy dekodiert den Dateinamen als latin1 → UTF-8-Namen
-      // ("Getränkekarte" → "GetrÃ¤nkekarte") reparieren.
-      const fileName = Buffer.from(file.originalname, "latin1").toString("utf8");
-      const doc = await prisma.document.create({
-        data: {
-          title, category: category as any,
-          fileName, mimeType: file.mimetype,
-          fileData: file.buffer, fileSize: file.size,
-          isPublished: true,
-        },
-        select: { id: true, title: true, category: true, fileName: true, mimeType: true, fileSize: true, isPublished: true, sortOrder: true, createdAt: true, updatedAt: true },
-      });
-      return res.status(201).json(doc);
-    } catch (e) { console.error(e); return res.status(500).json({ code: "INTERNAL_ERROR", message: "Serverfehler" }); }
-  });
+// POST /api/documents/upload — Datei (PDF/Word/Excel) als Base64 im JSON-Body.
+// Kein Multipart: die Netlify-Function behandelt Multipart-Bodies als UTF-8 und
+// zerstört dabei Binärdaten (jedes hohe Byte → U+FFFD). Base64 ist ASCII und
+// übersteht das unversehrt.
+router.post("/upload", adminOnly, async (req, res) => {
+  const { title, category, fileName, mimeType, dataBase64 } = req.body as Record<string, string>;
+  if (!title || !category || !fileName || !mimeType || !dataBase64)
+    return res.status(400).json({ code: "VALIDATION_ERROR", message: "Felder fehlen" });
+  if (!isAllowedDocumentType(mimeType))
+    return res.status(400).json({ code: "UNSUPPORTED_TYPE", message: "Nur PDF-, Word- und Excel-Dateien erlaubt" });
+  try {
+    const fileData = Buffer.from(dataBase64, "base64");
+    if (fileData.length === 0)
+      return res.status(400).json({ code: "VALIDATION_ERROR", message: "Leere Datei" });
+    if (fileData.length > MAX_DOCUMENT_SIZE)
+      return res.status(400).json({ code: "FILE_TOO_LARGE", message: "Datei zu groß (max. 5 MB)" });
+    const doc = await prisma.document.create({
+      data: {
+        title, category: category as any,
+        fileName, mimeType,
+        fileData, fileSize: fileData.length,
+        isPublished: true,
+      },
+      select: { id: true, title: true, category: true, fileName: true, mimeType: true, fileSize: true, isPublished: true, sortOrder: true, createdAt: true, updatedAt: true },
+    });
+    return res.status(201).json(doc);
+  } catch (e) { console.error(e); return res.status(500).json({ code: "INTERNAL_ERROR", message: "Serverfehler" }); }
 });
 
 // GET /api/documents/:id/view — Datei-Bytes INLINE (für <iframe>/Browser-Viewer).
