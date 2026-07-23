@@ -45,7 +45,13 @@ export function useUploadDocument() {
       fd.append("file", file);
       fd.append("title", title);
       fd.append("category", category);
-      return api.post("/documents/upload", fd, { headers: { "Content-Type": "multipart/form-data" } }).then((r) => r.data);
+      // WICHTIG: Content-Type NICHT selbst setzen. Der Default "application/json"
+      // der api-Instanz muss überschrieben werden (undefined), damit axios für die
+      // FormData automatisch "multipart/form-data; boundary=…" erzeugt — sonst
+      // fehlt die boundary und multer parst die Datei nicht.
+      return api
+        .post("/documents/upload", fd, { headers: { "Content-Type": undefined } })
+        .then((r) => r.data);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["documents"] }),
   });

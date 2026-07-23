@@ -32,10 +32,13 @@ router.post("/upload", adminOnly, (req, res) => {
     if (!file) return res.status(400).json({ code: "VALIDATION_ERROR", message: "Keine Datei" });
     if (!title || !category) return res.status(400).json({ code: "VALIDATION_ERROR", message: "Titel/Kategorie fehlt" });
     try {
+      // multer/busboy dekodiert den Dateinamen als latin1 → UTF-8-Namen
+      // ("Getränkekarte" → "GetrÃ¤nkekarte") reparieren.
+      const fileName = Buffer.from(file.originalname, "latin1").toString("utf8");
       const doc = await prisma.document.create({
         data: {
           title, category: category as any,
-          fileName: file.originalname, mimeType: file.mimetype,
+          fileName, mimeType: file.mimetype,
           fileData: file.buffer, fileSize: file.size,
           isPublished: true,
         },
@@ -44,6 +47,19 @@ router.post("/upload", adminOnly, (req, res) => {
       return res.status(201).json(doc);
     } catch (e) { console.error(e); return res.status(500).json({ code: "INTERNAL_ERROR", message: "Serverfehler" }); }
   });
+});
+
+// GET /api/documents/:id/view — Datei-Bytes INLINE (für <iframe>/Browser-Viewer).
+// Auth via ?token= (Header nicht möglich bei iframe-Navigation).
+router.get("/:id/view", async (req, res) => {
+  const doc = await prisma.document.findUnique({ where: { id: req.params.id } });
+  if (!doc || !doc.fileData) return res.status(404).json({ code: "NOT_FOUND", message: "Nicht gefunden" });
+  // helmets globale CSP (object-src 'none') blockt sonst den nativen PDF-Viewer
+  // des Browsers im <iframe> → weiße Seite. Für diese Datei-Antwort entfernen.
+  res.removeHeader("Content-Security-Policy");
+  res.setHeader("Content-Type", doc.mimeType ?? "application/octet-stream");
+  res.setHeader("Content-Disposition", `inline; filename="${encodeURIComponent(doc.fileName ?? "dokument")}"`);
+  return res.send(Buffer.from(doc.fileData));
 });
 
 // GET /api/documents/:id/download — Datei-Bytes streamen

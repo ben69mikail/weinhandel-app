@@ -38,5 +38,12 @@ export default defineConfig({
       "/api": "http://localhost:4000",
       "/socket.io": { target: "http://localhost:4000", ws: true }
     }
+  },
+  preview: {
+    port: 5173,
+    proxy: {
+      "/api": "http://localhost:4000",
+      "/socket.io": { target: "http://localhost:4000", ws: true }
+    }
   }
 });

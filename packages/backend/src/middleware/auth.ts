@@ -18,7 +18,9 @@ export async function authenticate(
   res: Response,
   next: NextFunction
 ) {
-  const token = req.headers.authorization?.split(" ")[1];
+  // Token aus Authorization-Header ODER (Fallback) aus ?token= — Letzteres für
+  // native Browser-Navigation wie <iframe src> / <img>, die keinen Header setzen kann.
+  const token = req.headers.authorization?.split(" ")[1] || (req.query.token as string | undefined);
   if (!token) return res.status(401).json({ code: "UNAUTHORIZED", message: "Nicht authentifiziert" });
 
   try {
