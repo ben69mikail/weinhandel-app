@@ -45,6 +45,26 @@ export function computeAutoBreaks(
   return decisions;
 }
 
+export interface BreakTier {
+  afterHours: number;
+  breakMinutes: number;
+}
+
+// Gestaffelte Pflicht-Pause: liefert die Pausenminuten der höchsten Stufe,
+// deren Stundenschwelle die Arbeitszeit erreicht (nicht additiv). Ohne
+// erreichte Stufe: 0.
+export function requiredBreakMinutes(workedMinutes: number, tiers: BreakTier[]): number {
+  let result = 0;
+  let highest = -1;
+  for (const tier of tiers) {
+    if (workedMinutes >= tier.afterHours * 60 && tier.afterHours > highest) {
+      highest = tier.afterHours;
+      result = tier.breakMinutes;
+    }
+  }
+  return result;
+}
+
 export interface DatevEntry {
   user: { personnelNumber: string | null; lastName: string; firstName: string };
   clockIn: Date;

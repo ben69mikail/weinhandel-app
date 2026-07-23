@@ -3,6 +3,7 @@ import { prisma } from "../lib/prisma.js";
 import { authenticate, AuthRequest } from "../middleware/auth.js";
 import { adminOnly } from "../middleware/adminOnly.js";
 import { buildDatevCsv } from "../services/scheduler-logic.js";
+import { vacationDaysInRange, vacationHours } from "../services/reporting-logic.js";
 
 const router = Router();
 router.use(authenticate, adminOnly);
@@ -13,12 +14,18 @@ router.get("/monthly", async (req: AuthRequest, res: Response) => {
   if (!month) return res.status(400).json({ error: "month fehlt" });
   const [y, m] = month.split("-").map(Number);
   try {
+    const monthStart = new Date(y, m - 1, 1);
+    const monthEnd = new Date(y, m, 0); // letzter Tag des Monats
     const users = await prisma.user.findMany({
       where: { isActive: true },
-      select: { id: true, firstName: true, lastName: true, employeeType: true, monthlyHours: true, personnelNumber: true },
+      select: { id: true, firstName: true, lastName: true, employeeType: true, monthlyHours: true, vacationHoursPerDay: true, personnelNumber: true },
     });
     const entries = await prisma.timeEntry.findMany({
-      where: { clockIn: { gte: new Date(y, m - 1, 1), lt: new Date(y, m, 1) }, clockOut: { not: null } },
+      where: { clockIn: { gte: monthStart, lt: new Date(y, m, 1) }, clockOut: { not: null } },
+    });
+    // Genehmigte Urlaubsanträge, die den Monat berühren
+    const vacations = await prisma.vacationRequest.findMany({
+      where: { type: "VACATION", status: "APPROVED", startDate: { lte: monthEnd }, endDate: { gte: monthStart } },
     });
 
     const report = users.map((u) => {
@@ -27,9 +34,15 @@ router.get("/monthly", async (req: AuthRequest, res: Response) => {
       const grossMinutes = userEntries.reduce((s, e) => s + (e.totalMinutes ?? 0), 0);
       const breakMinutes = userEntries.reduce((s, e) => s + (e.breakMinutes ?? 0), 0);
       const sollMinutes = (u.monthlyHours ?? 0) * 60;
+      // Urlaub in Stunden = Urlaubstage im Monat × Stunden-pro-Tag (pro Mitarbeiter)
+      const vacationDays = vacations
+        .filter((v) => v.userId === u.id)
+        .reduce((s, v) => s + vacationDaysInRange(v.startDate, v.endDate, monthStart, monthEnd), 0);
+      const vacHours = vacationHours(vacationDays, u.vacationHoursPerDay ?? 8);
       return {
         user: u, entries: userEntries, netMinutes, grossMinutes, breakMinutes,
         sollMinutes, diff: netMinutes - sollMinutes, days: userEntries.length,
+        vacationDays, vacationHours: vacHours,
       };
     });
     return res.json(report);

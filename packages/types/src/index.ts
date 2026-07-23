@@ -14,6 +14,7 @@ export interface User {
   role: "ADMIN" | "EMPLOYEE";
   employeeType: "PARTTIME" | "MINIJOB";
   monthlyHours?: number;
+  vacationHoursPerDay?: number;
   skills: string[];
   avatarUrl?: string;
   personnelNumber?: string;
@@ -98,6 +99,8 @@ export interface MonthlyReport {
   sollMinutes: number;
   diff: number;
   days: number;
+  vacationDays?: number;
+  vacationHours?: number;
 }
 
 export type VacationType = "VACATION" | "SICK" | "SPECIAL";
@@ -210,6 +213,8 @@ export interface AppSettings {
   defaultShiftEnd: string;
   autoBreakAfterHours: number;
   autoBreakMinutes: number;
+  autoBreak2AfterHours: number;
+  autoBreak2Minutes: number;
   datevClientNumber?: string;
   datevConsultantNumber?: string;
   emailFrom?: string;

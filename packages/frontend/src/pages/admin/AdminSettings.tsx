@@ -44,14 +44,17 @@ export default function AdminSettings() {
         </div>
       </div>
 
-      {/* Shifts */}
+      {/* Auto-Pausen (gestaffelt) */}
       <div className="bg-white rounded-xl border border-gray-200 p-5">
-        <h2 className="font-semibold text-gray-900 mb-4">Schichten & Pausen</h2>
+        <h2 className="font-semibold text-gray-900 mb-1">Auto-Pausen</h2>
+        <p className="text-xs text-gray-500 mb-4">
+          Pausen werden bei Schichtende automatisch von der Arbeitszeit abgezogen. Es zählt die höchste erreichte Stufe.
+        </p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Field label="Standard Beginn" k="defaultShiftStart" type="time"/>
-          <Field label="Standard Ende" k="defaultShiftEnd" type="time"/>
-          <Field label="Auto-Pause nach (Std)" k="autoBreakAfterHours" type="number"/>
-          <Field label="Pause Dauer (Min)" k="autoBreakMinutes" type="number"/>
+          <Field label="Stufe 1: nach (Std)" k="autoBreakAfterHours" type="number"/>
+          <Field label="Stufe 1: Pause (Min)" k="autoBreakMinutes" type="number"/>
+          <Field label="Stufe 2: nach (Std)" k="autoBreak2AfterHours" type="number"/>
+          <Field label="Stufe 2: Pause (Min)" k="autoBreak2Minutes" type="number"/>
         </div>
       </div>
 

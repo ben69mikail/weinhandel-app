@@ -4,7 +4,29 @@ import {
   buildDatevCsv,
   findBirthdays,
   isTempAdminExpired,
+  requiredBreakMinutes,
 } from "./scheduler-logic.js";
+
+describe("requiredBreakMinutes — gestaffelte Auto-Pause nach Arbeitszeit", () => {
+  const tiers = [
+    { afterHours: 6, breakMinutes: 30 },
+    { afterHours: 8, breakMinutes: 60 },
+  ];
+
+  it("keine Pause unter der ersten Schwelle", () => {
+    expect(requiredBreakMinutes(5 * 60, tiers)).toBe(0);
+  });
+
+  it("30 Min ab 6 Stunden", () => {
+    expect(requiredBreakMinutes(6 * 60, tiers)).toBe(30);
+    expect(requiredBreakMinutes(7 * 60, tiers)).toBe(30);
+  });
+
+  it("60 Min ab 8 Stunden (höchste erreichte Stufe, nicht additiv)", () => {
+    expect(requiredBreakMinutes(8 * 60, tiers)).toBe(60);
+    expect(requiredBreakMinutes(10 * 60, tiers)).toBe(60);
+  });
+});
 
 describe("computeAutoBreaks", () => {
   it("löst eine Pause aus, wenn die Arbeitszeit die Schwelle überschreitet", () => {

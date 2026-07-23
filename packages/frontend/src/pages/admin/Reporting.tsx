@@ -107,7 +107,7 @@ export default function Reporting() {
                     <td className="px-4 py-3 text-right font-mono text-gray-600">{fmtMin(e.sollMinutes ?? 0)}</td>
                     <td className="px-4 py-3 text-right font-mono font-medium text-gray-900">{fmtMin(e.netMinutes ?? 0)}</td>
                     <td className={`px-4 py-3 text-right font-mono font-semibold ${diffClass(diff)}`}>{diff >= 0 ? "+" : ""}{fmtMin(diff)}</td>
-                    <td className="px-4 py-3 text-right text-gray-500">{0}d</td>
+                    <td className="px-4 py-3 text-right text-gray-500" title={`${e.vacationDays ?? 0} Urlaubstag(e)`}>{e.vacationHours ?? 0} h</td>
                   </tr>
                 );
               })}
@@ -120,7 +120,7 @@ export default function Reporting() {
                   <td className="px-4 py-3 text-right font-mono text-gray-700">{fmtMin(totalSoll)}</td>
                   <td className="px-4 py-3 text-right font-mono text-gray-900">{fmtMin(totalIst)}</td>
                   <td className={`px-4 py-3 text-right font-mono ${diffClass(totalDiff)}`}>{totalDiff >= 0 ? "+" : ""}{fmtMin(totalDiff)}</td>
-                  <td />
+                  <td className="px-4 py-3 text-right text-gray-700">{entries.reduce((s, e) => s + (e.vacationHours ?? 0), 0)} h</td>
                 </tr>
               </tfoot>
             )}

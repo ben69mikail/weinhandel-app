@@ -22,6 +22,7 @@ model User {
   role             Role         @default(EMPLOYEE)
   employeeType     EmployeeType @default(PARTTIME)
   monthlyHours     Float?
+  vacationHoursPerDay Float?    @default(8.0)
   skills           String[]
   avatarUrl        String?
   personnelNumber  String?
@@ -333,7 +334,9 @@ model Settings {
   defaultShiftStart     String   @default("09:00")
   defaultShiftEnd       String   @default("17:00")
   autoBreakAfterHours   Float    @default(6.0)
-  autoBreakMinutes      Int      @default(15)
+  autoBreakMinutes      Int      @default(30)
+  autoBreak2AfterHours  Float    @default(8.0)
+  autoBreak2Minutes     Int      @default(60)
   datevClientNumber     String?
   datevConsultantNumber String?
   emailFrom             String?

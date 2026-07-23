@@ -11,6 +11,7 @@ const emptyForm = {
   firstName: "", lastName: "", email: "", password: "", phone: "",
   address: "", birthday: "", role: "EMPLOYEE" as "ADMIN" | "EMPLOYEE",
   employeeType: "PARTTIME" as "PARTTIME" | "MINIJOB", monthlyHours: 80,
+  vacationHoursPerDay: 8,
   skills: [] as string[], personnelNumber: "", isActive: true,
 };
 
@@ -199,6 +200,11 @@ export default function Employees() {
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">Soll-Std/Monat</label>
                   <input type="number" value={form.monthlyHours} onChange={(e) => setForm((f) => ({ ...f, monthlyHours: Number(e.target.value) }))}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#8B1A1A]/30" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Urlaubsstunden / Tag</label>
+                  <input type="number" step="0.5" value={form.vacationHoursPerDay} onChange={(e) => setForm((f) => ({ ...f, vacationHoursPerDay: Number(e.target.value) }))}
                     className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#8B1A1A]/30" />
                 </div>
               </div>

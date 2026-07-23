@@ -1,5 +1,6 @@
 import { prisma } from "../lib/prisma.js";
 import { ERRORS } from "../lib/errors.js";
+import { requiredBreakMinutes } from "./scheduler-logic.js";
 
 export class TimeService {
   static async clockIn(userId: string, shiftId?: string) {
@@ -21,12 +22,22 @@ export class TimeService {
 
     const clockOut = new Date();
     const totalMinutes = (clockOut.getTime() - entry.clockIn.getTime()) / 60000;
-    const breakMinutes = entry.breakMinutes ?? 0;
+    const manualBreak = entry.breakMinutes ?? 0;
+
+    // Gestaffelte Pflicht-Pause aus den Einstellungen (z.B. 6h→30min, 8h→60min).
+    // Es zählt das Maximum aus manuell genommener und gesetzlich fälliger Pause.
+    const settings = await prisma.settings.findUnique({ where: { id: "singleton" } });
+    const tiers = [
+      { afterHours: settings?.autoBreakAfterHours ?? 6, breakMinutes: settings?.autoBreakMinutes ?? 30 },
+      { afterHours: settings?.autoBreak2AfterHours ?? 8, breakMinutes: settings?.autoBreak2Minutes ?? 60 },
+    ];
+    const required = requiredBreakMinutes(totalMinutes, tiers);
+    const breakMinutes = Math.max(manualBreak, required);
     const netMinutes = totalMinutes - breakMinutes;
 
     return prisma.timeEntry.update({
       where: { id: entry.id },
-      data: { clockOut, totalMinutes, netMinutes },
+      data: { clockOut, totalMinutes, netMinutes, breakMinutes, autoBreak: required > manualBreak },
     });
   }
 

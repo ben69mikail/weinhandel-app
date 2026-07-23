@@ -19,6 +19,7 @@ const createUserSchema = z.object({
   role: z.enum(["ADMIN", "EMPLOYEE"]).default("EMPLOYEE"),
   employeeType: z.enum(["PARTTIME", "MINIJOB"]).default("PARTTIME"),
   monthlyHours: z.number().optional(),
+  vacationHoursPerDay: z.number().optional(),
   skills: z.array(z.string()).default([]),
   personnelNumber: z.string().optional(),
 });
@@ -38,6 +39,7 @@ router.get("/", async (req: AuthRequest, res: Response) => {
         ? {
             id: true, email: true, firstName: true, lastName: true,
             phone: true, role: true, employeeType: true, monthlyHours: true,
+            vacationHoursPerDay: true,
             skills: true, avatarUrl: true, personnelNumber: true,
             isActive: true, birthday: true, createdAt: true,
           }
