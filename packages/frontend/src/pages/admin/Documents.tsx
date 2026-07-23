@@ -3,6 +3,7 @@ import { useDocuments, useCreateDocument, useUpdateDocument, useDeleteDocument, 
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Plus, Pencil, Trash2, X, Eye, Upload, Download, FileText } from "lucide-react";
+import FileViewer from "@/components/FileViewer";
 
 const CATS = ["WINE_LIST","FOOD_MENU","DRINKS_MENU","SPECIAL_MENU","RECIPE","CHECKLIST","DRESSCODE","SERVICE_PROTOCOL","HYGIENE","EMPLOYEE_INFO","OTHER"];
 const CAT_LABEL: Record<string,string> = { WINE_LIST:"Weinkarte", FOOD_MENU:"Speisekarte", DRINKS_MENU:"Getränkekarte", SPECIAL_MENU:"Sonderkarte", RECIPE:"Rezept", CHECKLIST:"Checkliste", DRESSCODE:"Dresscode", SERVICE_PROTOCOL:"Serviceprotokoll", HYGIENE:"Hygiene", EMPLOYEE_INFO:"Mitarbeiterinfo", OTHER:"Sonstiges" };
@@ -15,6 +16,7 @@ export default function Documents() {
   const [editId, setEditId] = useState<string|null>(null);
   const [form, setForm] = useState({ ...empty });
   const [preview, setPreview] = useState<string|null>(null);
+  const [openFile, setOpenFile] = useState<{ id: string; title: string; fileName: string; mimeType: string | null } | null>(null);
   const [showUpload, setShowUpload] = useState(false);
   const [uploadForm, setUploadForm] = useState({ title: "", category: "WINE_LIST", file: null as File | null });
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -131,6 +133,18 @@ export default function Documents() {
         </div>
       )}
 
+      {/* In-App Datei-Viewer (PDF/Word/Excel) */}
+      {openFile && (
+        <FileViewer
+          docId={openFile.id}
+          title={openFile.title}
+          fileName={openFile.fileName}
+          mimeType={openFile.mimeType}
+          allowDownload
+          onClose={() => setOpenFile(null)}
+        />
+      )}
+
       {/* Preview modal */}
       {preview && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
@@ -160,7 +174,8 @@ export default function Documents() {
                 {d.content && <p className="text-sm text-gray-400 truncate mt-0.5">{d.content.slice(0,80)}…</p>}
               </div>
               <div className="flex items-center gap-1 flex-shrink-0">
-                {d.fileName && <button onClick={() => downloadDocument(d.id, d.fileName!)} className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg"><Download size={14}/></button>}
+                {d.fileName && <button onClick={() => setOpenFile({ id:d.id, title:d.title, fileName:d.fileName!, mimeType:d.mimeType ?? null })} className="p-1.5 text-gray-400 hover:text-[#8B1A1A] hover:bg-[#8B1A1A]/10 rounded-lg" title="Öffnen"><Eye size={14}/></button>}
+                {d.fileName && <button onClick={() => downloadDocument(d.id, d.fileName!)} className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg" title="Herunterladen"><Download size={14}/></button>}
                 {d.content && <button onClick={() => setPreview(d.content ?? null)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"><Eye size={14}/></button>}
                 <button onClick={() => openEdit(d)} className="p-1.5 text-gray-400 hover:text-[#8B1A1A] hover:bg-[#8B1A1A]/10 rounded-lg"><Pencil size={14}/></button>
                 <button onClick={() => deleteDoc.mutate(d.id)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"><Trash2 size={14}/></button>

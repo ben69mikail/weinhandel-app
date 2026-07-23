@@ -16,3 +16,14 @@ body {
 }
 
 .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+/* Gerenderte Dokumente (Word/Excel) im FileViewer */
+.file-viewer-content { color: #1f2937; line-height: 1.6; overflow-x: auto; }
+.file-viewer-content h1, .file-viewer-content h2, .file-viewer-content h3 { font-weight: 600; margin: 0.75em 0 0.4em; }
+.file-viewer-content p { margin: 0.5em 0; }
+.file-viewer-content ul, .file-viewer-content ol { margin: 0.5em 0 0.5em 1.5em; list-style: revert; }
+.file-viewer-content a { color: #8B1A1A; text-decoration: underline; }
+.file-viewer-content table { border-collapse: collapse; width: max-content; min-width: 100%; margin: 0.5em 0; font-size: 0.85rem; }
+.file-viewer-content th, .file-viewer-content td { border: 1px solid #d1d5db; padding: 4px 8px; text-align: left; white-space: nowrap; }
+.file-viewer-content tr:nth-child(even) td { background: #f9fafb; }
+.file-viewer-content .xlsx-sheet-title { font-weight: 700; color: #8B1A1A; margin-top: 1em; }
+.file-viewer-content img { max-width: 100%; height: auto; }
