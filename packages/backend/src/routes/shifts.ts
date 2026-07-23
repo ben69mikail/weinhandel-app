@@ -5,6 +5,7 @@ import { authenticate, AuthRequest } from "../middleware/auth.js";
 import { adminOnly } from "../middleware/adminOnly.js";
 import { ShiftService } from "../services/ShiftService.js";
 import { generateRecurringDates } from "../services/recurrence.js";
+import { reconcileAssignments } from "../services/shift-rules.js";
 import { ERRORS } from "../lib/errors.js";
 
 const router = Router();
@@ -20,7 +21,7 @@ const shiftSchema = z.object({
   area: z.string().default("Arbeitsbereich 1"),
   maxWorkers: z.number().default(2),
   minWorkers: z.number().default(1),
-  notes: z.string().optional(),
+  notes: z.string().nullish(),
   isPublished: z.boolean().default(false),
   isOpenShift: z.boolean().default(false),
   requiredSkills: z.array(z.string()).default([]),
@@ -126,20 +127,63 @@ router.put("/:id", adminOnly, async (req: AuthRequest, res: Response) => {
   // Wiederholung gilt nur beim Anlegen — beim Bearbeiten verwerfen (keine Shift-Spalten)
   const { assignUserIds, date, recurring, recurWeekdays, recurUntil, ...data } = parsed.data;
   try {
-    const shift = await prisma.shift.update({
-      where: { id: req.params.id },
+    const shiftId = req.params.id;
+    await prisma.shift.update({
+      where: { id: shiftId },
       data: { ...data, ...(date ? { date: new Date(date) } : {}) },
+    });
+
+    // Zuteilungen abgleichen, wenn die Liste mitgeschickt wurde (Bearbeiten-Modal).
+    if (assignUserIds !== undefined) {
+      const currentAssigned = (
+        await prisma.shiftAssignment.findMany({ where: { shiftId, status: "ASSIGNED" } })
+      ).map((a) => a.userId);
+      const { toAdd, toRemove } = reconcileAssignments(currentAssigned, assignUserIds);
+      await prisma.$transaction([
+        ...toRemove.map((userId) =>
+          prisma.shiftAssignment.delete({ where: { shiftId_userId: { shiftId, userId } } }),
+        ),
+        ...toAdd.map((userId) =>
+          prisma.shiftAssignment.upsert({
+            where: { shiftId_userId: { shiftId, userId } },
+            update: { status: "ASSIGNED" },
+            create: { shiftId, userId, status: "ASSIGNED" },
+          }),
+        ),
+      ]);
+    }
+
+    const shift = await prisma.shift.findUnique({
+      where: { id: shiftId },
       include: { assignments: { include: { user: { select: { id: true, firstName: true, lastName: true } } } } },
     });
     return res.json(shift);
   } catch (err) { console.error(err); return res.status(500).json({ error: "Serverfehler" }); }
 });
 
-// DELETE /api/shifts/:id (Admin)
+// DELETE /api/shifts/:id (Admin)  — ?scope=series löscht die ganze Wiederholungsserie
 router.delete("/:id", adminOnly, async (req: AuthRequest, res: Response) => {
+  const scope = (req.query.scope as string) ?? "single";
   try {
+    const shift = await prisma.shift.findUnique({ where: { id: req.params.id } });
+    if (!shift) return res.status(404).json(ERRORS.NOT_FOUND);
+
+    if (scope === "series" && shift.isRecurring) {
+      // Serie ohne seriesId-Spalte über die gemeinsamen Merkmale identifizieren.
+      const result = await prisma.shift.deleteMany({
+        where: {
+          isRecurring: true,
+          title: shift.title,
+          startTime: shift.startTime,
+          endTime: shift.endTime,
+          area: shift.area,
+        },
+      });
+      return res.json({ message: "Serie gelöscht", count: result.count });
+    }
+
     await prisma.shift.delete({ where: { id: req.params.id } });
-    return res.json({ message: "Gelöscht" });
+    return res.json({ message: "Gelöscht", count: 1 });
   } catch (err) { console.error(err); return res.status(500).json({ error: "Serverfehler" }); }
 });
 

@@ -40,9 +40,10 @@ export interface Shift {
   area: string;
   maxWorkers: number;
   minWorkers: number;
-  notes?: string;
+  notes?: string | null;
   isPublished: boolean;
   isOpenShift: boolean;
+  isRecurring: boolean;
   requiredSkills: string[];
   color: string;
   createdAt: string;

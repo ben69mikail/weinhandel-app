@@ -52,3 +52,17 @@ export function detectAssignConflicts(input: AssignConflictInput): AssignConflic
   }
   return conflicts;
 }
+
+// Gleicht die gewünschte Zuteilungsliste gegen den Ist-Zustand ab.
+// toAdd = neu zuzuteilen, toRemove = zu entfernen.
+export function reconcileAssignments(
+  current: string[],
+  desired: string[],
+): { toAdd: string[]; toRemove: string[] } {
+  const currentSet = new Set(current);
+  const desiredSet = new Set(desired);
+  return {
+    toAdd: desired.filter((id) => !currentSet.has(id)),
+    toRemove: current.filter((id) => !desiredSet.has(id)),
+  };
+}

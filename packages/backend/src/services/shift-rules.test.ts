@@ -1,5 +1,15 @@
 import { describe, it, expect } from "vitest";
-import { dayActionAllowed, detectAssignConflicts } from "./shift-rules.js";
+import { dayActionAllowed, detectAssignConflicts, reconcileAssignments } from "./shift-rules.js";
+
+describe("reconcileAssignments — Zuteilungen beim Bearbeiten abgleichen", () => {
+  it("liefert hinzuzufügende und zu entfernende User", () => {
+    expect(reconcileAssignments(["a", "b"], ["b", "c"])).toEqual({ toAdd: ["c"], toRemove: ["a"] });
+  });
+
+  it("keine Änderung bei identischen Listen (Reihenfolge egal)", () => {
+    expect(reconcileAssignments(["a", "b"], ["b", "a"])).toEqual({ toAdd: [], toRemove: [] });
+  });
+});
 
 describe("dayActionAllowed — Tag-Exklusivität Verfügbarkeit XOR Bewerbung", () => {
   it("erlaubt Bewerbung, wenn an dem Tag keine Verfügbarkeit abgegeben wurde", () => {

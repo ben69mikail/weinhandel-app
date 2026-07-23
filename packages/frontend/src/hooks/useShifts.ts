@@ -33,7 +33,8 @@ export function useUpdateShift() {
 export function useDeleteShift() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => api.delete(`/shifts/${id}`).then((r) => r.data),
+    mutationFn: ({ id, scope }: { id: string; scope?: "single" | "series" }) =>
+      api.delete(`/shifts/${id}${scope === "series" ? "?scope=series" : ""}`).then((r) => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["shifts"] }),
   });
 }

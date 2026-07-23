@@ -55,6 +55,7 @@ export default function Plan() {
   const [form, setForm] = useState({ ...emptyShift });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [assignConflict, setAssignConflict] = useState<{ userId: string; userName: string; conflicts: string[] } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Shift | null>(null);
 
   const weekStr = `${year}-W${String(week).padStart(2, "0")}`;
   const firstDayOfWeek = (() => { const jan4 = new Date(year, 0, 4); return new Date(jan4.getTime() - ((jan4.getDay() || 7) - 1) * 86400000 + (week - 1) * 7 * 86400000); })();
@@ -87,19 +88,88 @@ export default function Plan() {
   };
   const openEdit = (s: Shift) => {
     setEditingId(s.id);
-    setForm({ ...emptyShift, ...s, date: s.date.slice(0, 10), assignUserIds: s.assignments.map((a) => a.userId) });
+    setForm({
+      ...emptyShift,
+      title: s.title,
+      date: s.date.slice(0, 10),
+      startTime: s.startTime,
+      endTime: s.endTime,
+      location: s.location,
+      type: s.type,
+      area: s.area,
+      maxWorkers: s.maxWorkers,
+      minWorkers: s.minWorkers,
+      notes: s.notes ?? "",
+      isPublished: s.isPublished,
+      isOpenShift: s.isOpenShift,
+      requiredSkills: s.requiredSkills,
+      color: s.color,
+      assignUserIds: s.assignments.map((a) => a.userId),
+    });
     setModalOpen(true);
   };
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (editingId) await updateShift.mutateAsync({ id: editingId, ...form });
-    else await createShift.mutateAsync(form as Parameters<typeof createShift.mutateAsync>[0]);
-    setModalOpen(false);
+    // Sauberes Payload: nur editierbare Felder senden — NICHT den ganzen Shift
+    // zurückspiegeln (assignments/createdAt/notes:null etc. brachen den PUT).
+    const payload = {
+      title: form.title,
+      date: form.date,
+      startTime: form.startTime,
+      endTime: form.endTime,
+      location: form.location,
+      type: form.type,
+      area: form.area,
+      maxWorkers: form.maxWorkers,
+      minWorkers: form.minWorkers,
+      notes: form.notes || null,
+      isPublished: form.isPublished,
+      isOpenShift: form.isOpenShift,
+      requiredSkills: form.requiredSkills,
+      color: form.color,
+      assignUserIds: form.assignUserIds,
+    };
+    try {
+      if (editingId) {
+        await updateShift.mutateAsync({ id: editingId, ...payload });
+      } else {
+        await createShift.mutateAsync({
+          ...payload,
+          recurring: form.recurring,
+          recurWeekdays: form.recurWeekdays,
+          recurUntil: form.recurUntil,
+        } as Parameters<typeof createShift.mutateAsync>[0]);
+      }
+      setModalOpen(false);
+    } catch (err) {
+      const data = (err as { response?: { data?: { message?: string } } }).response?.data;
+      alert(data?.message ?? "Speichern fehlgeschlagen. Bitte Eingaben prüfen.");
+    }
   };
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (shift: Shift) => {
+    // Wiederkehrende Schicht → Modal mit Wahl "nur diese / ganze Serie".
+    if (shift.isRecurring) {
+      setDeleteTarget(shift);
+      return;
+    }
     if (!confirm("Schicht löschen?")) return;
-    await deleteShift.mutateAsync(id);
-    setSelectedShift(null);
+    try {
+      await deleteShift.mutateAsync({ id: shift.id });
+      setSelectedShift(null);
+    } catch {
+      alert("Löschen fehlgeschlagen.");
+    }
+  };
+  const confirmDelete = async (scope: "single" | "series") => {
+    if (!deleteTarget) return;
+    try {
+      await deleteShift.mutateAsync({ id: deleteTarget.id, scope });
+      setSelectedShift(null);
+    } catch {
+      alert("Löschen fehlgeschlagen.");
+    } finally {
+      setDeleteTarget(null);
+    }
   };
   const handlePublish = (s: Shift) => updateShift.mutateAsync({ id: s.id, isPublished: true });
   const handleToggleOpen = async (s: Shift) => {
@@ -452,7 +522,7 @@ export default function Plan() {
                 {selectedShift.isOpenShift ? "🔒 Schichtbörse schließen" : "🔓 In Schichtbörse stellen"}
               </Button>
               <Button variant="secondary" className="w-full" size="sm" onClick={() => { setSelectedShift(null); openEdit(selectedShift); }}>Bearbeiten</Button>
-              <Button variant="danger" className="w-full" size="sm" onClick={() => handleDelete(selectedShift.id)}><Trash2 size={14} /> Löschen</Button>
+              <Button variant="danger" className="w-full" size="sm" onClick={() => handleDelete(selectedShift)}><Trash2 size={14} /> Löschen</Button>
             </div>
           </div>
         </div>
@@ -476,6 +546,30 @@ export default function Plan() {
             <div className="flex gap-3">
               <Button variant="secondary" className="flex-1" onClick={() => setAssignConflict(null)}>Abbrechen</Button>
               <Button variant="danger" className="flex-1" disabled={assignShift.isPending} onClick={confirmAssignForce}>Trotzdem einteilen</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Löschen einer wiederkehrenden Schicht — nur diese oder ganze Serie */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/30">
+          <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl p-6">
+            <h3 className="font-semibold text-gray-900 mb-1 flex items-center gap-2">
+              <Trash2 size={16} className="text-red-600" /> Wiederkehrende Schicht löschen
+            </h3>
+            <p className="text-sm text-gray-600 mb-4">
+              „{deleteTarget.title}" ({deleteTarget.startTime}–{deleteTarget.endTime}) wiederholt sich.
+              Nur diesen Termin oder die ganze Serie löschen?
+            </p>
+            <div className="flex flex-col gap-2">
+              <Button variant="danger" className="w-full" disabled={deleteShift.isPending} onClick={() => confirmDelete("series")}>
+                Ganze Serie löschen
+              </Button>
+              <Button variant="secondary" className="w-full" disabled={deleteShift.isPending} onClick={() => confirmDelete("single")}>
+                Nur diesen Termin löschen
+              </Button>
+              <Button variant="secondary" className="w-full" onClick={() => setDeleteTarget(null)}>Abbrechen</Button>
             </div>
           </div>
         </div>
