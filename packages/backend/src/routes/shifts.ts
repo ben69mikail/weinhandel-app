@@ -5,7 +5,7 @@ import { authenticate, AuthRequest } from "../middleware/auth.js";
 import { adminOnly } from "../middleware/adminOnly.js";
 import { ShiftService } from "../services/ShiftService.js";
 import { generateRecurringDates } from "../services/recurrence.js";
-import { reconcileAssignments, findScheduleClashes } from "../services/shift-rules.js";
+import { reconcileAssignments, collectAssignConflicts, AssignConflict } from "../services/shift-rules.js";
 
 // Kalendertag-Grenzen [start, end) für Datums-Range-Queries.
 function dayBounds(d: Date) {
@@ -13,39 +13,49 @@ function dayBounds(d: Date) {
   return { start, end: new Date(start.getTime() + 86400000) };
 }
 
-// Prüft, ob eine Menge zuzuteilender Mitarbeiter mit ihren bestehenden
-// ASSIGNED-Schichten am selben Tag kollidiert (Zeitüberschneidung / Doppelbelegung).
+// Prüft zuzuteilende Mitarbeiter auf ALLE Konflikte gegen ihren Zustand am
+// Tag der Schicht: fehlende/abweichende Verfügbarkeit UND Zeitkollision mit
+// anderen ASSIGNED-Schichten. Liefert je Mitarbeiter mit Konflikt Name + Liste.
 async function collectAssignClashes(
   shift: { date: Date; startTime: string; endTime: string },
   userIds: string[],
   excludeShiftId?: string,
-): Promise<{ userId: string; userName: string; type: "TIME_OVERLAP" | "DOUBLE_BOOKING" }[]> {
+): Promise<{ userId: string; userName: string; conflicts: AssignConflict[] }[]> {
   if (userIds.length === 0) return [];
   const { start, end } = dayBounds(shift.date);
-  const assignments = await prisma.shiftAssignment.findMany({
-    where: {
-      userId: { in: userIds },
-      status: "ASSIGNED",
-      ...(excludeShiftId ? { shiftId: { not: excludeShiftId } } : {}),
-      shift: { date: { gte: start, lt: end } },
-    },
-    include: {
-      shift: { select: { startTime: true, endTime: true } },
-      user: { select: { firstName: true, lastName: true } },
-    },
-  });
-  const byUser = new Map<string, { startTime: string; endTime: string }[]>();
-  const names = new Map<string, string>();
-  for (const uid of userIds) byUser.set(uid, []);
+  const [assignments, avails, users] = await Promise.all([
+    prisma.shiftAssignment.findMany({
+      where: {
+        userId: { in: userIds },
+        status: "ASSIGNED",
+        ...(excludeShiftId ? { shiftId: { not: excludeShiftId } } : {}),
+        shift: { date: { gte: start, lt: end } },
+      },
+      include: { shift: { select: { startTime: true, endTime: true } } },
+    }),
+    prisma.availability.findMany({ where: { userId: { in: userIds }, date: { gte: start, lt: end } } }),
+    prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, firstName: true, lastName: true } }),
+  ]);
+  const nameById = new Map(users.map((u) => [u.id, `${u.firstName} ${u.lastName}`]));
+  const availById = new Map(avails.map((a) => [a.userId, a]));
+  const shiftsByUser = new Map<string, { startTime: string; endTime: string }[]>();
+  for (const uid of userIds) shiftsByUser.set(uid, []);
   for (const a of assignments) {
-    byUser.get(a.userId)?.push({ startTime: a.shift.startTime, endTime: a.shift.endTime });
-    names.set(a.userId, `${a.user.firstName} ${a.user.lastName}`);
+    shiftsByUser.get(a.userId)?.push({ startTime: a.shift.startTime, endTime: a.shift.endTime });
   }
-  const clashes = findScheduleClashes(
+  const candidates = userIds.map((uid) => {
+    const av = availById.get(uid);
+    return {
+      userId: uid,
+      availability: av ? { type: av.type, startTime: av.startTime, endTime: av.endTime } : null,
+      otherShiftsSameDay: shiftsByUser.get(uid) ?? [],
+    };
+  });
+  const conflicts = collectAssignConflicts(
     { startTime: shift.startTime, endTime: shift.endTime },
-    userIds.map((uid) => ({ userId: uid, otherShiftsSameDay: byUser.get(uid) ?? [] })),
+    candidates,
   );
-  return clashes.map((c) => ({ ...c, userName: names.get(c.userId) ?? "" }));
+  return conflicts.map((c) => ({ userId: c.userId, userName: nameById.get(c.userId) ?? "", conflicts: c.conflicts }));
 }
 import { ERRORS } from "../lib/errors.js";
 

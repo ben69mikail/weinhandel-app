@@ -57,7 +57,7 @@ export default function Plan() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [assignConflict, setAssignConflict] = useState<{ userId: string; userName: string; conflicts: string[] } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Shift | null>(null);
-  const [saveConflict, setSaveConflict] = useState<{ userName: string; type: string }[] | null>(null);
+  const [saveConflict, setSaveConflict] = useState<{ userName: string; conflicts: string[] }[] | null>(null);
 
   const weekStr = `${year}-W${String(week).padStart(2, "0")}`;
   const firstDayOfWeek = (() => { const jan4 = new Date(year, 0, 4); return new Date(jan4.getTime() - ((jan4.getDay() || 7) - 1) * 86400000 + (week - 1) * 7 * 86400000); })();
@@ -150,7 +150,7 @@ export default function Plan() {
       await doSave(false);
       setModalOpen(false);
     } catch (err) {
-      const data = (err as { response?: { data?: { code?: string; message?: string; clashes?: { userName: string; type: string }[] } } }).response?.data;
+      const data = (err as { response?: { data?: { code?: string; message?: string; clashes?: { userName: string; conflicts: string[] }[] } } }).response?.data;
       if (data?.code === "ASSIGN_CONFLICT" && data.clashes) {
         setSaveConflict(data.clashes); // Zeitkonflikt-Popup zeigen
       } else {
@@ -602,18 +602,20 @@ export default function Plan() {
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/40">
           <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl p-6">
             <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
-              <span className="text-red-600 text-lg">⚠️</span> Zeitkonflikt!
+              <span className="text-red-600 text-lg">⚠️</span> Konflikt bei der Zuteilung
             </h3>
             <p className="text-sm text-gray-600 mb-3">
-              Folgende Mitarbeiter sind an diesem Tag bereits eingeteilt:
+              Bei folgenden Mitarbeitern gibt es ein Problem:
             </p>
-            <ul className="text-sm text-gray-700 space-y-1.5 mb-4 list-disc pl-5">
+            <ul className="text-sm text-gray-700 space-y-2 mb-4">
               {saveConflict.map((c, i) => (
                 <li key={i}>
-                  <span className="font-medium">{c.userName}</span>{" "}
-                  {c.type === "TIME_OVERLAP"
-                    ? "— ZEITÜBERSCHNEIDUNG mit einer anderen Schicht!"
-                    : "— bereits an diesem Tag eingeteilt."}
+                  <span className="font-medium">{c.userName}</span>
+                  <ul className="list-disc pl-5 mt-0.5 text-gray-600">
+                    {c.conflicts.map((k) => (
+                      <li key={k}>{CONFLICT_LABELS[k] ?? k}</li>
+                    ))}
+                  </ul>
                 </li>
               ))}
             </ul>

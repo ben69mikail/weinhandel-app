@@ -68,28 +68,29 @@ export function detectAssignConflicts(input: AssignConflictInput): AssignConflic
   return conflicts;
 }
 
-export type ClashType = "TIME_OVERLAP" | "DOUBLE_BOOKING";
-
-export interface ClashCandidate {
+export interface ConflictCandidate {
   userId: string;
+  availability: AvailabilityRecord | null;
   otherShiftsSameDay: TimeRange[];
 }
 
-// Prüft mehrere Mitarbeiter beim Zuteilen (Create/Edit-Modal) auf Tages-
-// Kollisionen mit der Zielschicht. Liefert nur Mitarbeiter mit Kollision.
-export function findScheduleClashes(
+// Prüft mehrere Mitarbeiter beim Zuteilen (Create/Edit-Modal) auf ALLE
+// Konflikte (Verfügbarkeit + Zeitkollision). Liefert nur Mitarbeiter mit
+// mindestens einem Konflikt, je mit voller Konfliktliste.
+export function collectAssignConflicts(
   shift: TimeRange,
-  candidates: ClashCandidate[],
-): { userId: string; type: ClashType }[] {
-  const clashes: { userId: string; type: ClashType }[] = [];
-  for (const c of candidates) {
-    if (c.otherShiftsSameDay.some((o) => rangesOverlap(shift, o))) {
-      clashes.push({ userId: c.userId, type: "TIME_OVERLAP" });
-    } else if (c.otherShiftsSameDay.length > 0) {
-      clashes.push({ userId: c.userId, type: "DOUBLE_BOOKING" });
-    }
-  }
-  return clashes;
+  candidates: ConflictCandidate[],
+): { userId: string; conflicts: AssignConflict[] }[] {
+  return candidates
+    .map((c) => ({
+      userId: c.userId,
+      conflicts: detectAssignConflicts({
+        shift,
+        availability: c.availability,
+        otherShiftsSameDay: c.otherShiftsSameDay,
+      }),
+    }))
+    .filter((r) => r.conflicts.length > 0);
 }
 
 // Gleicht die gewünschte Zuteilungsliste gegen den Ist-Zustand ab.

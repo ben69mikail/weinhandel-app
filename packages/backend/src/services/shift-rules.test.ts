@@ -1,24 +1,31 @@
 import { describe, it, expect } from "vitest";
-import { dayActionAllowed, detectAssignConflicts, reconcileAssignments, findScheduleClashes } from "./shift-rules.js";
+import { dayActionAllowed, detectAssignConflicts, reconcileAssignments, collectAssignConflicts } from "./shift-rules.js";
 
-describe("findScheduleClashes — Kollisionen bei Modal-Zuteilung mehrerer Mitarbeiter", () => {
+describe("collectAssignConflicts — volle Konfliktprüfung bei Modal-Zuteilung mehrerer Mitarbeiter", () => {
   const shift = { startTime: "10:00", endTime: "14:00" };
 
-  it("meldet TIME_OVERLAP für Mitarbeiter mit zeitlich überlappender Schicht", () => {
+  it("meldet Zeit- UND Verfügbarkeitskonflikte pro Mitarbeiter, überspringt konfliktfreie", () => {
     expect(
-      findScheduleClashes(shift, [
-        { userId: "u1", otherShiftsSameDay: [{ startTime: "12:00", endTime: "16:00" }] },
+      collectAssignConflicts(shift, [
+        // u1: keine Verfügbarkeit + überlappende Schicht
+        { userId: "u1", availability: null, otherShiftsSameDay: [{ startTime: "12:00", endTime: "16:00" }] },
+        // u2: als nicht verfügbar markiert
+        { userId: "u2", availability: { type: "UNAVAILABLE", startTime: null, endTime: null }, otherShiftsSameDay: [] },
+        // u3: ganztägig verfügbar, keine andere Schicht → kein Konflikt → weg
+        { userId: "u3", availability: { type: "AVAILABLE", startTime: null, endTime: null }, otherShiftsSameDay: [] },
       ]),
-    ).toEqual([{ userId: "u1", type: "TIME_OVERLAP" }]);
+    ).toEqual([
+      { userId: "u1", conflicts: ["NO_AVAILABILITY", "TIME_OVERLAP"] },
+      { userId: "u2", conflicts: ["UNAVAILABLE"] },
+    ]);
   });
 
-  it("meldet DOUBLE_BOOKING bei gleichem Tag ohne Zeitkollision, nichts ohne andere Schicht", () => {
+  it("meldet OUTSIDE_TIMES, wenn die Schicht außerhalb der Teilverfügbarkeit liegt", () => {
     expect(
-      findScheduleClashes(shift, [
-        { userId: "u1", otherShiftsSameDay: [{ startTime: "14:00", endTime: "18:00" }] }, // grenzt an
-        { userId: "u2", otherShiftsSameDay: [] }, // keine → keine Warnung
+      collectAssignConflicts(shift, [
+        { userId: "u1", availability: { type: "PARTIAL", startTime: "11:00", endTime: "13:00" }, otherShiftsSameDay: [] },
       ]),
-    ).toEqual([{ userId: "u1", type: "DOUBLE_BOOKING" }]);
+    ).toEqual([{ userId: "u1", conflicts: ["OUTSIDE_TIMES"] }]);
   });
 });
 
