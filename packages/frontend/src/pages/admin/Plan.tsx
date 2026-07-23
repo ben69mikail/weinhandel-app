@@ -120,6 +120,7 @@ export default function Plan() {
   const handleAssign = async (shiftId: string, userId: string, userName: string) => {
     try {
       await assignShift.mutateAsync({ shiftId, userId });
+      setSelectedShift(null); // Panel schließen → frische Daten beim erneuten Öffnen
     } catch (err) {
       const data = (err as { response?: { data?: { code?: string; conflicts?: string[] } } }).response?.data;
       if (data?.code === "ASSIGN_CONFLICT" && data.conflicts) {
@@ -133,6 +134,7 @@ export default function Plan() {
     if (!assignConflict || !selectedShift) return;
     try {
       await assignShift.mutateAsync({ shiftId: selectedShift.id, userId: assignConflict.userId, force: true });
+      setSelectedShift(null); // Panel schließen → frische Daten beim erneuten Öffnen
     } finally {
       setAssignConflict(null);
     }
