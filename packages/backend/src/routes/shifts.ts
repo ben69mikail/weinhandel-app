@@ -5,7 +5,48 @@ import { authenticate, AuthRequest } from "../middleware/auth.js";
 import { adminOnly } from "../middleware/adminOnly.js";
 import { ShiftService } from "../services/ShiftService.js";
 import { generateRecurringDates } from "../services/recurrence.js";
-import { reconcileAssignments } from "../services/shift-rules.js";
+import { reconcileAssignments, findScheduleClashes } from "../services/shift-rules.js";
+
+// Kalendertag-Grenzen [start, end) für Datums-Range-Queries.
+function dayBounds(d: Date) {
+  const start = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  return { start, end: new Date(start.getTime() + 86400000) };
+}
+
+// Prüft, ob eine Menge zuzuteilender Mitarbeiter mit ihren bestehenden
+// ASSIGNED-Schichten am selben Tag kollidiert (Zeitüberschneidung / Doppelbelegung).
+async function collectAssignClashes(
+  shift: { date: Date; startTime: string; endTime: string },
+  userIds: string[],
+  excludeShiftId?: string,
+): Promise<{ userId: string; userName: string; type: "TIME_OVERLAP" | "DOUBLE_BOOKING" }[]> {
+  if (userIds.length === 0) return [];
+  const { start, end } = dayBounds(shift.date);
+  const assignments = await prisma.shiftAssignment.findMany({
+    where: {
+      userId: { in: userIds },
+      status: "ASSIGNED",
+      ...(excludeShiftId ? { shiftId: { not: excludeShiftId } } : {}),
+      shift: { date: { gte: start, lt: end } },
+    },
+    include: {
+      shift: { select: { startTime: true, endTime: true } },
+      user: { select: { firstName: true, lastName: true } },
+    },
+  });
+  const byUser = new Map<string, { startTime: string; endTime: string }[]>();
+  const names = new Map<string, string>();
+  for (const uid of userIds) byUser.set(uid, []);
+  for (const a of assignments) {
+    byUser.get(a.userId)?.push({ startTime: a.shift.startTime, endTime: a.shift.endTime });
+    names.set(a.userId, `${a.user.firstName} ${a.user.lastName}`);
+  }
+  const clashes = findScheduleClashes(
+    { startTime: shift.startTime, endTime: shift.endTime },
+    userIds.map((uid) => ({ userId: uid, otherShiftsSameDay: byUser.get(uid) ?? [] })),
+  );
+  return clashes.map((c) => ({ ...c, userName: names.get(c.userId) ?? "" }));
+}
 import { ERRORS } from "../lib/errors.js";
 
 const router = Router();
@@ -112,6 +153,17 @@ router.post("/", adminOnly, async (req: AuthRequest, res: Response) => {
       return res.status(201).json({ count: created.length, shifts: created });
     }
 
+    // Kollisionsprüfung für direkt zugeteilte Mitarbeiter (Create-Modal).
+    if (assignUserIds?.length && req.body.force !== true) {
+      const clashes = await collectAssignClashes(
+        { date: new Date(date), startTime: data.startTime, endTime: data.endTime },
+        assignUserIds,
+      );
+      if (clashes.length > 0) {
+        return res.status(409).json({ code: "ASSIGN_CONFLICT", message: "Zeitkonflikt bei Zuteilung", clashes });
+      }
+    }
+
     const shift = await prisma.shift.create({
       data: { ...data, date: new Date(date), assignments: assignmentCreate },
       include: { assignments: { include: { user: { select: { id: true, firstName: true, lastName: true } } } } },
@@ -128,17 +180,40 @@ router.put("/:id", adminOnly, async (req: AuthRequest, res: Response) => {
   const { assignUserIds, date, recurring, recurWeekdays, recurUntil, ...data } = parsed.data;
   try {
     const shiftId = req.params.id;
+    const existing = await prisma.shift.findUnique({ where: { id: shiftId } });
+    if (!existing) return res.status(404).json(ERRORS.NOT_FOUND);
+
+    // Zuteilungs-Delta vorab bestimmen, um neu hinzukommende auf Kollision zu prüfen.
+    let toAdd: string[] = [];
+    let toRemove: string[] = [];
+    if (assignUserIds !== undefined) {
+      const currentAssigned = (
+        await prisma.shiftAssignment.findMany({ where: { shiftId, status: "ASSIGNED" } })
+      ).map((a) => a.userId);
+      ({ toAdd, toRemove } = reconcileAssignments(currentAssigned, assignUserIds));
+
+      if (toAdd.length && req.body.force !== true) {
+        const clashes = await collectAssignClashes(
+          {
+            date: date ? new Date(date) : existing.date,
+            startTime: data.startTime ?? existing.startTime,
+            endTime: data.endTime ?? existing.endTime,
+          },
+          toAdd,
+          shiftId,
+        );
+        if (clashes.length > 0) {
+          return res.status(409).json({ code: "ASSIGN_CONFLICT", message: "Zeitkonflikt bei Zuteilung", clashes });
+        }
+      }
+    }
+
     await prisma.shift.update({
       where: { id: shiftId },
       data: { ...data, ...(date ? { date: new Date(date) } : {}) },
     });
 
-    // Zuteilungen abgleichen, wenn die Liste mitgeschickt wurde (Bearbeiten-Modal).
     if (assignUserIds !== undefined) {
-      const currentAssigned = (
-        await prisma.shiftAssignment.findMany({ where: { shiftId, status: "ASSIGNED" } })
-      ).map((a) => a.userId);
-      const { toAdd, toRemove } = reconcileAssignments(currentAssigned, assignUserIds);
       await prisma.$transaction([
         ...toRemove.map((userId) =>
           prisma.shiftAssignment.delete({ where: { shiftId_userId: { shiftId, userId } } }),

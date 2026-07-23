@@ -57,6 +57,7 @@ export default function Plan() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [assignConflict, setAssignConflict] = useState<{ userId: string; userName: string; conflicts: string[] } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Shift | null>(null);
+  const [saveConflict, setSaveConflict] = useState<{ userName: string; type: string }[] | null>(null);
 
   const weekStr = `${year}-W${String(week).padStart(2, "0")}`;
   const firstDayOfWeek = (() => { const jan4 = new Date(year, 0, 4); return new Date(jan4.getTime() - ((jan4.getDay() || 7) - 1) * 86400000 + (week - 1) * 7 * 86400000); })();
@@ -109,8 +110,8 @@ export default function Plan() {
     });
     setModalOpen(true);
   };
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Ein Speichern (Create/Edit); force=true überschreibt Zeitkonflikt-Warnung.
+  const doSave = async (force: boolean) => {
     // Sauberes Payload: nur editierbare Felder senden — NICHT den ganzen Shift
     // zurückspiegeln (assignments/createdAt/notes:null etc. brachen den PUT).
     const payload = {
@@ -129,22 +130,42 @@ export default function Plan() {
       requiredSkills: form.requiredSkills,
       color: form.color,
       assignUserIds: form.assignUserIds,
+      ...(force ? { force: true } : {}),
     };
+    if (editingId) {
+      await updateShift.mutateAsync({ id: editingId, ...payload });
+    } else {
+      await createShift.mutateAsync({
+        ...payload,
+        recurring: form.recurring,
+        recurWeekdays: form.recurWeekdays,
+        recurUntil: form.recurUntil,
+      } as Parameters<typeof createShift.mutateAsync>[0]);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     try {
-      if (editingId) {
-        await updateShift.mutateAsync({ id: editingId, ...payload });
-      } else {
-        await createShift.mutateAsync({
-          ...payload,
-          recurring: form.recurring,
-          recurWeekdays: form.recurWeekdays,
-          recurUntil: form.recurUntil,
-        } as Parameters<typeof createShift.mutateAsync>[0]);
-      }
+      await doSave(false);
       setModalOpen(false);
     } catch (err) {
-      const data = (err as { response?: { data?: { message?: string } } }).response?.data;
-      alert(data?.message ?? "Speichern fehlgeschlagen. Bitte Eingaben prüfen.");
+      const data = (err as { response?: { data?: { code?: string; message?: string; clashes?: { userName: string; type: string }[] } } }).response?.data;
+      if (data?.code === "ASSIGN_CONFLICT" && data.clashes) {
+        setSaveConflict(data.clashes); // Zeitkonflikt-Popup zeigen
+      } else {
+        alert(data?.message ?? "Speichern fehlgeschlagen. Bitte Eingaben prüfen.");
+      }
+    }
+  };
+  const confirmSaveForce = async () => {
+    try {
+      await doSave(true);
+      setModalOpen(false);
+    } catch {
+      alert("Speichern fehlgeschlagen.");
+    } finally {
+      setSaveConflict(null);
     }
   };
   const handleDelete = async (shift: Shift) => {
@@ -571,6 +592,34 @@ export default function Plan() {
                 Nur diesen Termin löschen
               </Button>
               <Button variant="secondary" className="w-full" onClick={() => setDeleteTarget(null)}>Abbrechen</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Zeitkonflikt beim Speichern (Create/Edit-Modal-Zuteilung) */}
+      {saveConflict && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/40">
+          <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl p-6">
+            <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+              <span className="text-red-600 text-lg">⚠️</span> Zeitkonflikt!
+            </h3>
+            <p className="text-sm text-gray-600 mb-3">
+              Folgende Mitarbeiter sind an diesem Tag bereits eingeteilt:
+            </p>
+            <ul className="text-sm text-gray-700 space-y-1.5 mb-4 list-disc pl-5">
+              {saveConflict.map((c, i) => (
+                <li key={i}>
+                  <span className="font-medium">{c.userName}</span>{" "}
+                  {c.type === "TIME_OVERLAP"
+                    ? "— ZEITÜBERSCHNEIDUNG mit einer anderen Schicht!"
+                    : "— bereits an diesem Tag eingeteilt."}
+                </li>
+              ))}
+            </ul>
+            <div className="flex gap-3">
+              <Button variant="secondary" className="flex-1" onClick={() => setSaveConflict(null)}>Abbrechen</Button>
+              <Button variant="danger" className="flex-1" disabled={createShift.isPending || updateShift.isPending} onClick={confirmSaveForce}>Trotzdem speichern</Button>
             </div>
           </div>
         </div>

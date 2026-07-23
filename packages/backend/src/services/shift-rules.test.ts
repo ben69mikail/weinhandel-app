@@ -1,5 +1,26 @@
 import { describe, it, expect } from "vitest";
-import { dayActionAllowed, detectAssignConflicts, reconcileAssignments } from "./shift-rules.js";
+import { dayActionAllowed, detectAssignConflicts, reconcileAssignments, findScheduleClashes } from "./shift-rules.js";
+
+describe("findScheduleClashes — Kollisionen bei Modal-Zuteilung mehrerer Mitarbeiter", () => {
+  const shift = { startTime: "10:00", endTime: "14:00" };
+
+  it("meldet TIME_OVERLAP für Mitarbeiter mit zeitlich überlappender Schicht", () => {
+    expect(
+      findScheduleClashes(shift, [
+        { userId: "u1", otherShiftsSameDay: [{ startTime: "12:00", endTime: "16:00" }] },
+      ]),
+    ).toEqual([{ userId: "u1", type: "TIME_OVERLAP" }]);
+  });
+
+  it("meldet DOUBLE_BOOKING bei gleichem Tag ohne Zeitkollision, nichts ohne andere Schicht", () => {
+    expect(
+      findScheduleClashes(shift, [
+        { userId: "u1", otherShiftsSameDay: [{ startTime: "14:00", endTime: "18:00" }] }, // grenzt an
+        { userId: "u2", otherShiftsSameDay: [] }, // keine → keine Warnung
+      ]),
+    ).toEqual([{ userId: "u1", type: "DOUBLE_BOOKING" }]);
+  });
+});
 
 describe("reconcileAssignments — Zuteilungen beim Bearbeiten abgleichen", () => {
   it("liefert hinzuzufügende und zu entfernende User", () => {
