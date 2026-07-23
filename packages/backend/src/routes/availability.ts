@@ -2,6 +2,8 @@ import { Router, Response } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { authenticate, AuthRequest } from "../middleware/auth.js";
+import { ERRORS } from "../lib/errors.js";
+import { dayActionAllowed } from "../services/shift-rules.js";
 
 const router = Router();
 router.use(authenticate);
@@ -54,6 +56,18 @@ router.post("/", async (req: AuthRequest, res: Response) => {
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
   const { date, type, startTime, endTime, note } = parsed.data;
   try {
+    // Tag-Exklusivität: keine Verfügbarkeit, wenn an dem Tag bereits eine
+    // Bewerbung auf eine Schicht vorliegt.
+    const day = new Date(date);
+    const start = new Date(day.getFullYear(), day.getMonth(), day.getDate());
+    const end = new Date(start.getTime() + 86400000);
+    const applications = await prisma.shiftAssignment.count({
+      where: { userId: req.user!.id, status: "APPLIED", shift: { date: { gte: start, lt: end } } },
+    });
+    if (!dayActionAllowed("AVAILABILITY", { availabilities: 0, applications })) {
+      return res.status(409).json(ERRORS.DAY_LOCKED);
+    }
+
     const avail = await prisma.availability.upsert({
       where: { userId_date: { userId: req.user!.id, date: new Date(date) } },
       update: { type, startTime: startTime ?? null, endTime: endTime ?? null, note: note ?? null },

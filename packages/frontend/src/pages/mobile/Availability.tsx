@@ -41,9 +41,14 @@ export default function AvailabilityPage() {
   const handleSelect = async (type: AvailType) => {
     if (!pickerDay) return;
     const date = `${year}-${String(month).padStart(2,"0")}-${String(pickerDay).padStart(2,"0")}`;
-    await setAvail.mutateAsync({ date, type, note: note || undefined });
-    setPickerDay(null);
-    setNote("");
+    try {
+      await setAvail.mutateAsync({ date, type, note: note || undefined });
+      setPickerDay(null);
+      setNote("");
+    } catch (err) {
+      const data = (err as { response?: { data?: { code?: string; message?: string } } }).response?.data;
+      alert(data?.code === "DAY_LOCKED" ? data.message : "Speichern fehlgeschlagen.");
+    }
   };
 
   return (

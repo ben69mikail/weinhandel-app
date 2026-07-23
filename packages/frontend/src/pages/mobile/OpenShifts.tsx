@@ -14,6 +14,15 @@ export default function OpenShifts() {
   const hasApplied = (shiftId: string) =>
     shifts.find((s) => s.id === shiftId)?.assignments.some((a) => a.userId === user?.id);
 
+  const handleApply = async (id: string) => {
+    try {
+      await apply.mutateAsync(id);
+    } catch (err) {
+      const data = (err as { response?: { data?: { code?: string; message?: string } } }).response?.data;
+      alert(data?.code === "DAY_LOCKED" ? data.message : "Bewerbung fehlgeschlagen.");
+    }
+  };
+
   return (
     <div className="px-4 pt-6 pb-4 space-y-4">
       <div>
@@ -60,7 +69,7 @@ export default function OpenShifts() {
                   )}
 
                   <Button
-                    onClick={() => !applied && apply.mutate(s.id)}
+                    onClick={() => !applied && handleApply(s.id)}
                     disabled={applied || apply.isPending || free <= 0}
                     variant={applied ? "secondary" : "primary"}
                     className="w-full justify-center"

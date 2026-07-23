@@ -30,6 +30,13 @@ function parseAvailDate(dateStr: string): Date {
   return new Date(y, m - 1, d); // local midnight, no timezone shift
 }
 const DAY_NAMES = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
+// Klartext für Konflikt-Codes aus dem Backend (detectAssignConflicts).
+const CONFLICT_LABELS: Record<string, string> = {
+  NO_AVAILABILITY: "Dieser Mitarbeiter hat für diesen Tag keine Verfügbarkeit angegeben.",
+  UNAVAILABLE: "Dieser Mitarbeiter hat sich für diesen Tag als NICHT verfügbar markiert.",
+  OUTSIDE_TIMES: "Die Schichtzeiten liegen außerhalb der angegebenen Verfügbarkeit.",
+  DOUBLE_BOOKING: "Achtung: Dieser Mitarbeiter ist an diesem Tag bereits für eine andere Schicht eingeteilt!",
+};
 const TYPE_LABELS: Record<string, string> = { REGULAR: "Regulär", EVENT: "Event", TASTING: "Verkostung", CONCERT: "Konzert", HOLIDAY_COVERAGE: "Notfall" };
 const emptyShift = { title: "", date: "", startTime: "09:00", endTime: "17:00", location: "Weinhandel", type: "REGULAR", area: "Arbeitsbereich 1", maxWorkers: 2, minWorkers: 1, notes: "", isPublished: false, isOpenShift: false, requiredSkills: [] as string[], color: "#8B1A1A", assignUserIds: [] as string[], recurring: false, recurWeekdays: [] as number[], recurUntil: "" };
 
@@ -47,6 +54,7 @@ export default function Plan() {
   const [selectedShift, setSelectedShift] = useState<Shift | null>(null);
   const [form, setForm] = useState({ ...emptyShift });
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [assignConflict, setAssignConflict] = useState<{ userId: string; userName: string; conflicts: string[] } | null>(null);
 
   const weekStr = `${year}-W${String(week).padStart(2, "0")}`;
   const firstDayOfWeek = (() => { const jan4 = new Date(year, 0, 4); return new Date(jan4.getTime() - ((jan4.getDay() || 7) - 1) * 86400000 + (week - 1) * 7 * 86400000); })();
@@ -107,6 +115,29 @@ export default function Plan() {
   const getApplied = (userId: string, day: Date) =>
     shifts.filter((s) => isSameDay(parseAvailDate(s.date), day) && s.assignments.some((a) => a.userId === userId && a.status === "APPLIED"));
 
+  // Einteilen mit Konflikt-Vorprüfung: Backend liefert bei Konflikten 409
+  // ASSIGN_CONFLICT → Popup. Bestätigt der Admin, wird mit force=true erneut gesendet.
+  const handleAssign = async (shiftId: string, userId: string, userName: string) => {
+    try {
+      await assignShift.mutateAsync({ shiftId, userId });
+    } catch (err) {
+      const data = (err as { response?: { data?: { code?: string; conflicts?: string[] } } }).response?.data;
+      if (data?.code === "ASSIGN_CONFLICT" && data.conflicts) {
+        setAssignConflict({ userId, userName, conflicts: data.conflicts });
+      } else {
+        alert("Einteilen fehlgeschlagen.");
+      }
+    }
+  };
+  const confirmAssignForce = async () => {
+    if (!assignConflict || !selectedShift) return;
+    try {
+      await assignShift.mutateAsync({ shiftId: selectedShift.id, userId: assignConflict.userId, force: true });
+    } finally {
+      setAssignConflict(null);
+    }
+  };
+
   return (
     <div className="space-y-4">
       {/* Week navigation */}
@@ -152,6 +183,38 @@ export default function Plan() {
             })}
           </div>
 
+          {/* Offene Schichten — ganz oben über den Mitarbeitern */}
+          <div className="grid grid-cols-8 border-b border-gray-200 min-h-[48px]" style={{ backgroundColor: "rgba(220,38,38,0.04)" }}>
+            <div className="px-3 py-2 flex items-center text-xs border-r border-gray-100 font-semibold gap-1" style={{ color: "#b91c1c" }}>
+              <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: "#dc2626" }} /> Offen
+            </div>
+            {days.map((d, i) => {
+              const openShifts = shifts.filter((s) => isSameDay(parseAvailDate(s.date), d) && s.assignments.length === 0);
+              const partialShifts = shifts.filter((s) => isSameDay(parseAvailDate(s.date), d) && s.assignments.filter(a => a.status !== "REJECTED").length > 0 && s.assignments.filter(a => a.status !== "REJECTED").length < s.minWorkers);
+              return (
+                <div key={i} className="border-l border-gray-100 p-1">
+                  {openShifts.map((s) => (
+                    <div key={s.id} onClick={() => setSelectedShift(s)}
+                      className="text-[10px] rounded px-1.5 py-1 mb-0.5 cursor-pointer text-white font-semibold flex items-center gap-1"
+                      style={{ backgroundColor: "#dc2626" }}>
+                      <span className="truncate flex-1">{s.title} {s.startTime}–{s.endTime}</span>
+                      {/* Bereichsfarbe überdeckt das Rote am Kästchenende */}
+                      <span className="w-3 h-3 rounded-sm shrink-0 border border-white/50" style={{ backgroundColor: s.color }} title="Bereichsfarbe" />
+                    </div>
+                  ))}
+                  {partialShifts.map((s) => (
+                    <div key={s.id} onClick={() => setSelectedShift(s)}
+                      className="text-[10px] rounded px-1.5 py-1 mb-0.5 cursor-pointer text-white font-semibold flex items-center gap-1"
+                      style={{ backgroundColor: "#ea580c" }}>
+                      <span className="truncate flex-1">{s.title} {s.assignments.filter(a => a.status !== "REJECTED").length}/{s.minWorkers}</span>
+                      <span className="w-3 h-3 rounded-sm shrink-0 border border-white/50" style={{ backgroundColor: s.color }} title="Bereichsfarbe" />
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+
           {/* Employee rows */}
           {users.map((u) => (
             <div key={u.id} className="grid grid-cols-8 border-b border-gray-100 min-h-[64px]">
@@ -189,11 +252,12 @@ export default function Plan() {
                       </div>
                     ))}
 
-                    {/* Eingeteilt: bordeaux */}
+                    {/* Eingeteilt: Farbe der Schicht (vom Admin gewählter Bereich) */}
                     {dayShifts.map((s) => (
                       <div key={s.id}
                         onClick={(e) => { e.stopPropagation(); setSelectedShift(s); }}
-                        className="text-[10px] rounded px-1.5 py-1 mb-0.5 cursor-pointer hover:opacity-80 text-white truncate font-medium bg-[#8B1A1A]">
+                        className="text-[10px] rounded px-1.5 py-1 mb-0.5 cursor-pointer hover:opacity-80 text-white truncate font-medium"
+                        style={{ backgroundColor: s.color }}>
                         {s.startTime}–{s.endTime}
                       </div>
                     ))}
@@ -209,35 +273,6 @@ export default function Plan() {
               })}
             </div>
           ))}
-
-          {/* Unassigned / Open shifts row — KNALLROT */}
-          <div className="grid grid-cols-8 border-b border-gray-100 min-h-[48px]" style={{ backgroundColor: "rgba(220,38,38,0.04)" }}>
-            <div className="px-3 py-2 flex items-center text-xs border-r border-gray-100 font-semibold gap-1" style={{ color: "#b91c1c" }}>
-              <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: "#dc2626" }} /> Offen
-            </div>
-            {days.map((d, i) => {
-              const openShifts = shifts.filter((s) => isSameDay(parseAvailDate(s.date), d) && s.assignments.length === 0);
-              const partialShifts = shifts.filter((s) => isSameDay(parseAvailDate(s.date), d) && s.assignments.filter(a => a.status !== "REJECTED").length > 0 && s.assignments.filter(a => a.status !== "REJECTED").length < s.minWorkers);
-              return (
-                <div key={i} className="border-l border-gray-100 p-1">
-                  {openShifts.map((s) => (
-                    <div key={s.id} onClick={() => setSelectedShift(s)}
-                      className="text-[10px] rounded px-1.5 py-1 mb-0.5 cursor-pointer text-white truncate font-semibold"
-                      style={{ backgroundColor: "#dc2626" }}>
-                      {s.title} {s.startTime}–{s.endTime}
-                    </div>
-                  ))}
-                  {partialShifts.map((s) => (
-                    <div key={s.id} onClick={() => setSelectedShift(s)}
-                      className="text-[10px] rounded px-1.5 py-1 mb-0.5 cursor-pointer text-white truncate font-semibold"
-                      style={{ backgroundColor: "#ea580c" }}>
-                      {s.title} {s.assignments.filter(a => a.status !== "REJECTED").length}/{s.minWorkers}
-                    </div>
-                  ))}
-                </div>
-              );
-            })}
-          </div>
 
           {/* Verfügbar-Zusammenfassung */}
           <div className="grid grid-cols-8 min-h-[40px]" style={{ backgroundColor: "rgba(20,83,45,0.04)" }}>
@@ -338,7 +373,7 @@ export default function Plan() {
                           {a.startTime && <p className="text-xs text-green-600">{a.startTime}–{a.endTime}</p>}
                         </div>
                         <button
-                          onClick={() => assignShift.mutate({ shiftId: selectedShift.id, userId: a.user.id })}
+                          onClick={() => handleAssign(selectedShift.id, a.user.id, `${a.user.firstName} ${a.user.lastName}`)}
                           disabled={assignShift.isPending}
                           className="px-2.5 py-1 text-xs bg-[#8B1A1A] text-white rounded-lg hover:bg-[#6B1414] font-medium">
                           Einteilen
@@ -347,6 +382,42 @@ export default function Plan() {
                     ))}
                   </div>
                 </div>
+              );
+            })()}
+
+            {/* Alle Mitarbeiter einteilen (auch ohne Verfügbarkeit) */}
+            {(() => {
+              const shiftDate = parseAvailDate(selectedShift.date);
+              const assignedIds = new Set(selectedShift.assignments.map((a) => a.userId));
+              const availableIds = new Set(
+                allAvails
+                  .filter((a) => isSameDay(parseAvailDate(a.date), shiftDate) && a.type === "AVAILABLE")
+                  .map((a) => a.user.id),
+              );
+              // Nur die, die weder schon zugeteilt/beworben noch als verfügbar gelistet sind.
+              const others = users.filter((u) => !assignedIds.has(u.id) && !availableIds.has(u.id));
+              if (others.length === 0) return null;
+              return (
+                <details className="group">
+                  <summary className="text-xs font-medium text-gray-500 mb-2 flex items-center gap-1 cursor-pointer list-none">
+                    <span className="w-2 h-2 rounded-full bg-gray-400 inline-block" />
+                    Weitere Mitarbeiter einteilen ({others.length}) — Warnung bei fehlender Verfügbarkeit
+                  </summary>
+                  <div className="space-y-1.5 mt-1">
+                    {others.map((u) => (
+                      <div key={u.id} className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
+                        <Avatar name={`${u.firstName} ${u.lastName}`} src={u.avatarUrl} size="sm" />
+                        <span className="text-sm text-gray-700 flex-1 truncate">{u.firstName} {u.lastName}</span>
+                        <button
+                          onClick={() => handleAssign(selectedShift.id, u.id, `${u.firstName} ${u.lastName}`)}
+                          disabled={assignShift.isPending}
+                          className="px-2.5 py-1 text-xs bg-gray-700 text-white rounded-lg hover:bg-gray-800 font-medium">
+                          Einteilen
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </details>
               );
             })()}
 
@@ -379,6 +450,29 @@ export default function Plan() {
               </Button>
               <Button variant="secondary" className="w-full" size="sm" onClick={() => { setSelectedShift(null); openEdit(selectedShift); }}>Bearbeiten</Button>
               <Button variant="danger" className="w-full" size="sm" onClick={() => handleDelete(selectedShift.id)}><Trash2 size={14} /> Löschen</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Konflikt-Bestätigung beim Einteilen */}
+      {assignConflict && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/30">
+          <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl p-6">
+            <h3 className="font-semibold text-gray-900 mb-1 flex items-center gap-2">
+              <span className="text-amber-500 text-lg">⚠️</span> Trotzdem einteilen?
+            </h3>
+            <p className="text-sm text-gray-600 mb-3">
+              <span className="font-medium">{assignConflict.userName}</span> für diese Schicht:
+            </p>
+            <ul className="text-sm text-gray-700 space-y-1.5 mb-4 list-disc pl-5">
+              {assignConflict.conflicts.map((c) => (
+                <li key={c}>{CONFLICT_LABELS[c] ?? c}</li>
+              ))}
+            </ul>
+            <div className="flex gap-3">
+              <Button variant="secondary" className="flex-1" onClick={() => setAssignConflict(null)}>Abbrechen</Button>
+              <Button variant="danger" className="flex-1" disabled={assignShift.isPending} onClick={confirmAssignForce}>Trotzdem einteilen</Button>
             </div>
           </div>
         </div>

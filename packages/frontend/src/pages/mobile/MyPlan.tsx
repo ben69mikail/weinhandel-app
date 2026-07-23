@@ -130,6 +130,15 @@ function SchichtboerseTab() {
   const hasApplied = (shiftId: string) =>
     shifts.find((s) => s.id === shiftId)?.assignments.some((a) => a.userId === user?.id);
 
+  const handleApply = async (id: string) => {
+    try {
+      await apply.mutateAsync(id);
+    } catch (err) {
+      const data = (err as { response?: { data?: { code?: string; message?: string } } }).response?.data;
+      alert(data?.code === "DAY_LOCKED" ? data.message : "Bewerbung fehlgeschlagen.");
+    }
+  };
+
   return (
     <div className="space-y-3">
       <p className="text-sm text-gray-500">{shifts.length} offene Schichten</p>
@@ -169,7 +178,7 @@ function SchichtboerseTab() {
                   </div>
                 )}
                 <button
-                  onClick={() => !applied && apply.mutate(s.id)}
+                  onClick={() => !applied && handleApply(s.id)}
                   disabled={applied || apply.isPending || free <= 0}
                   className="w-full py-2 px-4 rounded-xl text-sm font-semibold transition-colors"
                   style={applied
@@ -217,8 +226,13 @@ function VerfuegbarkeitTab() {
   const handleSave = async () => {
     if (!pickerDay) return;
     const date = `${year}-${String(month).padStart(2,"0")}-${String(pickerDay).padStart(2,"0")}`;
-    await setAvail.mutateAsync({ date, type: "AVAILABLE", startTime, endTime });
-    setPickerDay(null);
+    try {
+      await setAvail.mutateAsync({ date, type: "AVAILABLE", startTime, endTime });
+      setPickerDay(null);
+    } catch (err) {
+      const data = (err as { response?: { data?: { code?: string; message?: string } } }).response?.data;
+      alert(data?.code === "DAY_LOCKED" ? data.message : "Speichern fehlgeschlagen.");
+    }
   };
 
   return (

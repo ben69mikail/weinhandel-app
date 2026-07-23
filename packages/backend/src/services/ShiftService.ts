@@ -1,5 +1,13 @@
 import { prisma } from "../lib/prisma.js";
-import { ERRORS } from "../lib/errors.js";
+import { ERRORS, apiError } from "../lib/errors.js";
+import { dayActionAllowed, detectAssignConflicts } from "./shift-rules.js";
+
+// Kalendertag-Grenzen [start, end) für Datums-Range-Queries.
+function dayRange(d: Date) {
+  const start = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const end = new Date(start.getTime() + 86400000);
+  return { start, end };
+}
 
 const SHIFT_INCLUDE = {
   assignments: {
@@ -10,8 +18,13 @@ const SHIFT_INCLUDE = {
 } as const;
 
 export class ShiftService {
-  /** Admin: direktes Einteilen eines Mitarbeiters */
-  static async assign(shiftId: string, userId: string) {
+  /**
+   * Admin: direktes Einteilen eines Mitarbeiters.
+   * Ohne `force` werden Verfügbarkeits-/Doppelschicht-Konflikte als
+   * ASSIGN_CONFLICT (409, mit conflicts-Liste) gemeldet, damit die UI ein
+   * Bestätigungs-Popup zeigen kann. Mit `force` überschreibt der Admin.
+   */
+  static async assign(shiftId: string, userId: string, opts?: { force?: boolean }) {
     const shift = await prisma.shift.findUnique({ where: { id: shiftId }, include: { assignments: true } });
     if (!shift) throw ERRORS.NOT_FOUND;
 
@@ -22,6 +35,31 @@ export class ShiftService {
 
     if (shift.assignments.filter((a) => a.status === "ASSIGNED").length >= shift.maxWorkers) {
       throw ERRORS.SHIFT_FULL;
+    }
+
+    if (!opts?.force) {
+      const { start, end } = dayRange(shift.date);
+      const availability = await prisma.availability.findFirst({
+        where: { userId, date: { gte: start, lt: end } },
+      });
+      const otherAssignmentsSameDay = await prisma.shiftAssignment.count({
+        where: {
+          userId,
+          status: "ASSIGNED",
+          shiftId: { not: shiftId },
+          shift: { date: { gte: start, lt: end } },
+        },
+      });
+      const conflicts = detectAssignConflicts({
+        shift: { startTime: shift.startTime, endTime: shift.endTime },
+        availability: availability
+          ? { type: availability.type, startTime: availability.startTime, endTime: availability.endTime }
+          : null,
+        otherAssignmentsSameDay,
+      });
+      if (conflicts.length > 0) {
+        throw { ...apiError("ASSIGN_CONFLICT", "Konflikt beim Einteilen"), conflicts };
+      }
     }
 
     return prisma.shiftAssignment.upsert({
@@ -36,6 +74,15 @@ export class ShiftService {
     const shift = await prisma.shift.findUnique({ where: { id: shiftId } });
     if (!shift) throw ERRORS.NOT_FOUND;
     if (!shift.isOpenShift || !shift.isPublished) throw ERRORS.SHIFT_NOT_OPEN;
+
+    // Tag-Exklusivität: keine Bewerbung, wenn an dem Tag Verfügbarkeit abgegeben wurde.
+    const { start, end } = dayRange(shift.date);
+    const availabilities = await prisma.availability.count({
+      where: { userId, date: { gte: start, lt: end } },
+    });
+    if (!dayActionAllowed("APPLICATION", { availabilities, applications: 0 })) {
+      throw ERRORS.DAY_LOCKED;
+    }
 
     return prisma.shiftAssignment.upsert({
       where: { shiftId_userId: { shiftId, userId } },

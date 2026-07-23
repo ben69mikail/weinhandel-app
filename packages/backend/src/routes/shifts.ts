@@ -153,10 +153,10 @@ router.put("/:id/publish", adminOnly, async (req: AuthRequest, res: Response) =>
 
 // POST /api/shifts/:id/assign (Admin)
 router.post("/:id/assign", adminOnly, async (req: AuthRequest, res: Response) => {
-  const { userId } = req.body;
+  const { userId, force } = req.body;
   if (!userId) return res.status(400).json(ERRORS.NOT_FOUND);
   try {
-    const assignment = await ShiftService.assign(req.params.id, userId);
+    const assignment = await ShiftService.assign(req.params.id, userId, { force: force === true });
     return res.json(assignment);
   } catch (err: any) {
     if (err?.code) return res.status(err.code === "NOT_FOUND" ? 404 : 409).json(err);

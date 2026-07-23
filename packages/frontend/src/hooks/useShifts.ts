@@ -41,8 +41,8 @@ export function useDeleteShift() {
 export function useAssignShift() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ shiftId, userId }: { shiftId: string; userId: string }) =>
-      api.post(`/shifts/${shiftId}/assign`, { userId }).then((r) => r.data),
+    mutationFn: ({ shiftId, userId, force }: { shiftId: string; userId: string; force?: boolean }) =>
+      api.post(`/shifts/${shiftId}/assign`, { userId, ...(force ? { force: true } : {}) }).then((r) => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["shifts"] }),
   });
 }

@@ -9,6 +9,8 @@ export type ErrorCode =
   | "SHIFT_FULL"
   | "SHIFT_ALREADY_ASSIGNED"
   | "SHIFT_NOT_OPEN"
+  | "DAY_LOCKED"
+  | "ASSIGN_CONFLICT"
   | "CLOCK_ALREADY_IN"
   | "CLOCK_NOT_IN"
   | "VACATION_OVERLAP"
@@ -33,6 +35,10 @@ export const ERRORS = {
   SHIFT_FULL: apiError("SHIFT_FULL", "Schicht ist bereits voll"),
   SHIFT_ALREADY_ASSIGNED: apiError("SHIFT_ALREADY_ASSIGNED", "Bereits eingeteilt"),
   SHIFT_NOT_OPEN: apiError("SHIFT_NOT_OPEN", "Schicht ist nicht als offene Schicht verfügbar"),
+  DAY_LOCKED: apiError(
+    "DAY_LOCKED",
+    "An diesem Tag hast du dich bereits festgelegt — entweder Verfügbarkeit oder Bewerbung, nicht beides.",
+  ),
   CLOCK_ALREADY_IN: apiError("CLOCK_ALREADY_IN", "Bereits eingestempelt"),
   CLOCK_NOT_IN: apiError("CLOCK_NOT_IN", "Nicht eingestempelt"),
   VACATION_OVERLAP: apiError("VACATION_OVERLAP", "Urlaub überschneidet sich mit bestehendem Antrag"),
