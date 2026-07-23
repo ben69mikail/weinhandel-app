@@ -23,7 +23,13 @@ export default defineConfig({
           { src: "/icons/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any maskable" }
         ]
       },
-      workbox: { globPatterns: ["**/*.{js,css,html,ico,png,svg}"] }
+      workbox: {
+        globPatterns: ["**/*.{js,css,html,ico,png,svg}"],
+        // /api NICHT über den SPA-Navigation-Fallback (index.html) leiten —
+        // sonst bekommt z.B. ein <iframe src="/api/documents/:id/view"> die
+        // index.html statt der Datei (PDF blieb weiß).
+        navigateFallbackDenylist: [/^\/api\//],
+      }
     })
   ],
   resolve: {
