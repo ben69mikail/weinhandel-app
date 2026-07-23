@@ -35,7 +35,8 @@ const CONFLICT_LABELS: Record<string, string> = {
   NO_AVAILABILITY: "Dieser Mitarbeiter hat für diesen Tag keine Verfügbarkeit angegeben.",
   UNAVAILABLE: "Dieser Mitarbeiter hat sich für diesen Tag als NICHT verfügbar markiert.",
   OUTSIDE_TIMES: "Die Schichtzeiten liegen außerhalb der angegebenen Verfügbarkeit.",
-  DOUBLE_BOOKING: "Achtung: Dieser Mitarbeiter ist an diesem Tag bereits für eine andere Schicht eingeteilt!",
+  TIME_OVERLAP: "ZEITKONFLIKT: Diese Schicht überschneidet sich zeitlich mit einer anderen Schicht dieser Person am selben Tag!",
+  DOUBLE_BOOKING: "Diese Person ist an diesem Tag bereits für eine andere Schicht eingeteilt.",
 };
 const TYPE_LABELS: Record<string, string> = { REGULAR: "Regulär", EVENT: "Event", TASTING: "Verkostung", CONCERT: "Konzert", HOLIDAY_COVERAGE: "Notfall" };
 const emptyShift = { title: "", date: "", startTime: "09:00", endTime: "17:00", location: "Weinhandel", type: "REGULAR", area: "Arbeitsbereich 1", maxWorkers: 2, minWorkers: 1, notes: "", isPublished: false, isOpenShift: false, requiredSkills: [] as string[], color: "#8B1A1A", assignUserIds: [] as string[], recurring: false, recurWeekdays: [] as number[], recurUntil: "" };

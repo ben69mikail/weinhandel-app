@@ -16,6 +16,7 @@ export type AssignConflict =
   | "NO_AVAILABILITY"
   | "UNAVAILABLE"
   | "OUTSIDE_TIMES"
+  | "TIME_OVERLAP"
   | "DOUBLE_BOOKING";
 
 export interface AvailabilityRecord {
@@ -24,10 +25,21 @@ export interface AvailabilityRecord {
   endTime: string | null;
 }
 
+export interface TimeRange {
+  startTime: string;
+  endTime: string;
+}
+
 export interface AssignConflictInput {
   shift: { startTime: string; endTime: string };
   availability: AvailabilityRecord | null;
-  otherAssignmentsSameDay: number;
+  // Zeiten der anderen Schichten, für die der Mitarbeiter am selben Tag ASSIGNED ist.
+  otherShiftsSameDay: TimeRange[];
+}
+
+// Zwei "HH:MM"-Intervalle überlappen sich (Berührung an den Rändern zählt nicht).
+function rangesOverlap(a: TimeRange, b: TimeRange): boolean {
+  return a.startTime < b.endTime && b.startTime < a.endTime;
 }
 
 // Ermittelt, weshalb ein Admin-Einteilen eine Warnung auslösen sollte.
@@ -47,7 +59,10 @@ export function detectAssignConflicts(input: AssignConflictInput): AssignConflic
       input.shift.endTime > availability.endTime;
     if (outside) conflicts.push("OUTSIDE_TIMES");
   }
-  if (input.otherAssignmentsSameDay > 0) {
+  const others = input.otherShiftsSameDay;
+  if (others.some((o) => rangesOverlap(input.shift, o))) {
+    conflicts.push("TIME_OVERLAP");
+  } else if (others.length > 0) {
     conflicts.push("DOUBLE_BOOKING");
   }
   return conflicts;

@@ -124,11 +124,16 @@ function MeinPlanTab() {
 // ── Schichtbörse Tab ───────────────────────────────────────────────────────────
 function SchichtboerseTab() {
   const { data: shifts = [], isLoading } = useOpenShifts();
+  const { data: myAvails = [] } = useAvailability(""); // alle Verfügbarkeiten des Users
   const apply = useApplyShift();
   const user = useAuthStore((s) => s.user);
 
   const hasApplied = (shiftId: string) =>
     shifts.find((s) => s.id === shiftId)?.assignments.some((a) => a.userId === user?.id);
+
+  // Tag-Exklusivität: an Tagen mit abgegebener Verfügbarkeit ist Bewerben gesperrt.
+  const availDates = new Set(myAvails.map((a) => a.date.slice(0, 10)));
+  const lockedByAvailability = (s: { date: string }) => availDates.has(s.date.slice(0, 10));
 
   const handleApply = async (id: string) => {
     try {
@@ -153,6 +158,7 @@ function SchichtboerseTab() {
         shifts.map((s) => {
           const applied = hasApplied(s.id);
           const free = s.maxWorkers - s.assignments.length;
+          const availLocked = !applied && lockedByAvailability(s);
           return (
             <div key={s.id}
               className="rounded-2xl border overflow-hidden shadow-sm transition-colors"
@@ -178,16 +184,16 @@ function SchichtboerseTab() {
                   </div>
                 )}
                 <button
-                  onClick={() => !applied && handleApply(s.id)}
-                  disabled={applied || apply.isPending || free <= 0}
+                  onClick={() => !applied && !availLocked && handleApply(s.id)}
+                  disabled={applied || availLocked || apply.isPending || free <= 0}
                   className="w-full py-2 px-4 rounded-xl text-sm font-semibold transition-colors"
                   style={applied
                     ? { backgroundColor: "#166534", color: "#fff", cursor: "default" }
-                    : free <= 0
+                    : availLocked || free <= 0
                       ? { backgroundColor: "#e5e7eb", color: "#9ca3af", cursor: "not-allowed" }
                       : { backgroundColor: "#8B1A1A", color: "#fff" }}
                 >
-                  {applied ? "✓ Beworben" : free <= 0 ? "Ausgebucht" : "Jetzt bewerben"}
+                  {applied ? "✓ Beworben" : availLocked ? "🔒 Verfügbarkeit abgegeben" : free <= 0 ? "Ausgebucht" : "Jetzt bewerben"}
                 </button>
               </div>
             </div>
@@ -208,7 +214,16 @@ function VerfuegbarkeitTab() {
   const [endTime, setEndTime] = useState("17:00");
   const monthStr = `${year}-${String(month).padStart(2, "0")}`;
   const { data: avails = [] } = useAvailability(monthStr);
+  const { data: myShifts = [] } = useMyShifts(monthStr);
+  const user = useAuthStore((s) => s.user);
   const setAvail = useSetAvailability();
+
+  // Tag-Exklusivität: an Tagen mit eigener Bewerbung ist Verfügbarkeit gesperrt.
+  const appliedDays = new Set(
+    myShifts
+      .filter((s) => s.assignments.some((a) => a.userId === user?.id && a.status === "APPLIED"))
+      .map((s) => new Date(s.date).getDate()),
+  );
 
   const prev = () => { if (month === 1) { setYear((y) => y - 1); setMonth(12); } else setMonth((m) => m - 1); };
   const next = () => { if (month === 12) { setYear((y) => y + 1); setMonth(1); } else setMonth((m) => m + 1); };
@@ -259,17 +274,21 @@ function VerfuegbarkeitTab() {
             const isToday = day === now.getDate() && month === now.getMonth()+1 && year === now.getFullYear();
             const isPast = new Date(year, month-1, day) < new Date(now.getFullYear(), now.getMonth(), now.getDate());
             const isActive = avail?.type === "AVAILABLE";
+            const isApplied = appliedDays.has(day); // an dem Tag beworben → Verfügbarkeit gesperrt
+            const locked = isPast || isApplied;
             return (
-              <button key={day} disabled={isPast}
-                onClick={() => !isPast && openPicker(day)}
+              <button key={day} disabled={locked}
+                onClick={() => !locked && openPicker(day)}
+                title={isApplied ? "An diesem Tag hast du dich für eine Schicht beworben — Verfügbarkeit gesperrt." : undefined}
                 className={cn("aspect-square rounded-lg flex flex-col items-center justify-center text-sm transition-colors",
-                  isPast ? "opacity-25 cursor-not-allowed" : "hover:bg-gray-100",
+                  isPast ? "opacity-25 cursor-not-allowed" : isApplied ? "cursor-not-allowed bg-amber-50" : "hover:bg-gray-100",
                   pickerDay === day ? "ring-2 ring-[#8B1A1A]" : "",
                   isActive ? "bg-green-800 !text-white" : isToday ? "ring-2 ring-[#8B1A1A]" : "")}>
-                <span className={cn(isActive ? "text-white font-semibold" : isToday ? "font-bold text-[#8B1A1A]" : "text-gray-700")}>{day}</span>
+                <span className={cn(isActive ? "text-white font-semibold" : isApplied ? "text-amber-600 font-semibold" : isToday ? "font-bold text-[#8B1A1A]" : "text-gray-700")}>{day}</span>
                 {isActive && avail?.startTime && (
                   <span className="text-[8px] text-green-200 leading-tight">{avail.startTime}</span>
                 )}
+                {isApplied && !isActive && <span className="text-[8px] leading-tight">🔒</span>}
               </button>
             );
           })}

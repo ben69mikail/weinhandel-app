@@ -34,7 +34,7 @@ describe("detectAssignConflicts — Warnungen beim Admin-Einteilen", () => {
 
   it("meldet NO_AVAILABILITY, wenn der Mitarbeiter keine Verfügbarkeit am Tag hat", () => {
     expect(
-      detectAssignConflicts({ shift, availability: null, otherAssignmentsSameDay: 0 }),
+      detectAssignConflicts({ shift, availability: null, otherShiftsSameDay: [] }),
     ).toEqual(["NO_AVAILABILITY"]);
   });
 
@@ -43,7 +43,7 @@ describe("detectAssignConflicts — Warnungen beim Admin-Einteilen", () => {
       detectAssignConflicts({
         shift,
         availability: { type: "UNAVAILABLE", startTime: null, endTime: null },
-        otherAssignmentsSameDay: 0,
+        otherShiftsSameDay: [],
       }),
     ).toEqual(["UNAVAILABLE"]);
   });
@@ -53,7 +53,7 @@ describe("detectAssignConflicts — Warnungen beim Admin-Einteilen", () => {
       detectAssignConflicts({
         shift,
         availability: { type: "AVAILABLE", startTime: null, endTime: null },
-        otherAssignmentsSameDay: 0,
+        otherShiftsSameDay: [],
       }),
     ).toEqual([]);
   });
@@ -63,7 +63,7 @@ describe("detectAssignConflicts — Warnungen beim Admin-Einteilen", () => {
       detectAssignConflicts({
         shift, // 10:00–18:00
         availability: { type: "PARTIAL", startTime: "08:00", endTime: "14:00" },
-        otherAssignmentsSameDay: 0,
+        otherShiftsSameDay: [],
       }),
     ).toEqual(["OUTSIDE_TIMES"]);
   });
@@ -73,24 +73,38 @@ describe("detectAssignConflicts — Warnungen beim Admin-Einteilen", () => {
       detectAssignConflicts({
         shift, // 10:00–18:00
         availability: { type: "PARTIAL", startTime: "09:00", endTime: "20:00" },
-        otherAssignmentsSameDay: 0,
+        otherShiftsSameDay: [],
       }),
     ).toEqual([]);
   });
 
-  it("meldet DOUBLE_BOOKING, wenn der Mitarbeiter am Tag schon eingeteilt ist", () => {
+  it("meldet TIME_OVERLAP, wenn sich die Zeiten mit einer anderen Schicht überschneiden", () => {
     expect(
       detectAssignConflicts({
-        shift,
+        shift, // 10:00–18:00
         availability: { type: "AVAILABLE", startTime: null, endTime: null },
-        otherAssignmentsSameDay: 1,
+        otherShiftsSameDay: [{ startTime: "16:00", endTime: "20:00" }], // überlappt 16–18
+      }),
+    ).toEqual(["TIME_OVERLAP"]);
+  });
+
+  it("meldet DOUBLE_BOOKING (kein TIME_OVERLAP), wenn am selben Tag aber ohne Zeitkollision", () => {
+    expect(
+      detectAssignConflicts({
+        shift, // 10:00–18:00
+        availability: { type: "AVAILABLE", startTime: null, endTime: null },
+        otherShiftsSameDay: [{ startTime: "18:00", endTime: "22:00" }], // grenzt an, keine Überlappung
       }),
     ).toEqual(["DOUBLE_BOOKING"]);
   });
 
-  it("kombiniert Warnungen (keine Verfügbarkeit + Doppelschicht)", () => {
+  it("kombiniert Warnungen (keine Verfügbarkeit + Zeitkollision)", () => {
     expect(
-      detectAssignConflicts({ shift, availability: null, otherAssignmentsSameDay: 2 }),
-    ).toEqual(["NO_AVAILABILITY", "DOUBLE_BOOKING"]);
+      detectAssignConflicts({
+        shift, // 10:00–18:00
+        availability: null,
+        otherShiftsSameDay: [{ startTime: "12:00", endTime: "15:00" }],
+      }),
+    ).toEqual(["NO_AVAILABILITY", "TIME_OVERLAP"]);
   });
 });

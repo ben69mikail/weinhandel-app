@@ -42,20 +42,24 @@ export class ShiftService {
       const availability = await prisma.availability.findFirst({
         where: { userId, date: { gte: start, lt: end } },
       });
-      const otherAssignmentsSameDay = await prisma.shiftAssignment.count({
+      const otherAssignments = await prisma.shiftAssignment.findMany({
         where: {
           userId,
           status: "ASSIGNED",
           shiftId: { not: shiftId },
           shift: { date: { gte: start, lt: end } },
         },
+        include: { shift: { select: { startTime: true, endTime: true } } },
       });
       const conflicts = detectAssignConflicts({
         shift: { startTime: shift.startTime, endTime: shift.endTime },
         availability: availability
           ? { type: availability.type, startTime: availability.startTime, endTime: availability.endTime }
           : null,
-        otherAssignmentsSameDay,
+        otherShiftsSameDay: otherAssignments.map((a) => ({
+          startTime: a.shift.startTime,
+          endTime: a.shift.endTime,
+        })),
       });
       if (conflicts.length > 0) {
         throw { ...apiError("ASSIGN_CONFLICT", "Konflikt beim Einteilen"), conflicts };
