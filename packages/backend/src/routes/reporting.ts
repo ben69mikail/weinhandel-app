@@ -2,6 +2,7 @@ import { Router, Response } from "express";
 import { prisma } from "../lib/prisma.js";
 import { authenticate, AuthRequest } from "../middleware/auth.js";
 import { adminOnly } from "../middleware/adminOnly.js";
+import { buildDatevCsv } from "../services/scheduler-logic.js";
 
 const router = Router();
 router.use(authenticate, adminOnly);
@@ -47,16 +48,7 @@ router.get("/export-datev", async (req: AuthRequest, res: Response) => {
       orderBy: [{ user: { lastName: "asc" } }, { clockIn: "asc" }],
     });
 
-    const BOM = "﻿";
-    const header = "Personalnummer;Nachname;Vorname;Datum;Stunden Brutto;Pausen Min;Stunden Netto;Schichtart";
-    const rows = entries.map((e) => {
-      const date = e.clockIn.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
-      const gross = ((e.totalMinutes ?? 0) / 60).toFixed(2).replace(".", ",");
-      const net = ((e.netMinutes ?? 0) / 60).toFixed(2).replace(".", ",");
-      return [e.user.personnelNumber ?? "", e.user.lastName, e.user.firstName, date, gross, e.breakMinutes, net, "Regulär"].join(";");
-    });
-
-    const csv = BOM + [header, ...rows].join("\r\n");
+    const csv = buildDatevCsv(entries);
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
     res.setHeader("Content-Disposition", `attachment; filename="DATEV_${month}.csv"`);
     return res.send(csv);
