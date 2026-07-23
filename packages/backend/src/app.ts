@@ -57,33 +57,6 @@ app.use(rateLimit({
 }));
 
 app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
-
-// TEMPORÄR: Diagnose der DB-Verbindung. Gibt niemals Zugangsdaten preis.
-// Nach der Fehlersuche wieder entfernen.
-app.get("/api/health/db", async (_req, res) => {
-  const scrub = (s: string) => s.replace(/\/\/[^@\s]*@/g, "//***:***@");
-  const raw = process.env.DATABASE_URL;
-  let target = "nicht gesetzt";
-  if (raw) {
-    try {
-      const u = new URL(raw);
-      target = `${u.hostname}:${u.port || "5432"}${u.search ? " " + u.search : ""}`;
-    } catch { target = "unlesbar"; }
-  }
-  try {
-    const { prisma } = await import("./lib/prisma.js");
-    await prisma.$queryRaw`SELECT 1`;
-    return res.json({ hasDatabaseUrl: !!raw, target, query: "ok" });
-  } catch (err: any) {
-    return res.status(500).json({
-      hasDatabaseUrl: !!raw,
-      target,
-      errorName: err?.name ?? null,
-      errorCode: err?.code ?? null,
-      message: scrub(String(err?.message ?? "")).slice(0, 400),
-    });
-  }
-});
 app.use("/api/auth", authRouter);
 app.use("/api/users", usersRouter);
 app.use("/api/shifts", shiftsRouter);
