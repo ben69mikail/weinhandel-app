@@ -6,6 +6,7 @@ import { adminOnly } from "../middleware/adminOnly.js";
 import { ShiftService } from "../services/ShiftService.js";
 import { generateRecurringDates } from "../services/recurrence.js";
 import { reconcileAssignments, collectAssignConflicts, AssignConflict } from "../services/shift-rules.js";
+import { notify } from "../services/notify.js";
 
 // Kalendertag-Grenzen [start, end) für Datums-Range-Queries.
 function dayBounds(d: Date) {
@@ -286,6 +287,17 @@ router.post("/:id/assign", adminOnly, async (req: AuthRequest, res: Response) =>
   if (!userId) return res.status(400).json(ERRORS.NOT_FOUND);
   try {
     const assignment = await ShiftService.assign(req.params.id, userId, { force: force === true });
+    // Mitarbeiter benachrichtigen (In-App + Push)
+    const shift = await prisma.shift.findUnique({ where: { id: req.params.id }, select: { title: true, date: true, startTime: true, endTime: true } });
+    if (shift) {
+      const d = shift.date.toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" });
+      await notify(userId, {
+        type: "SHIFT_ASSIGNED",
+        title: "Neue Schicht",
+        message: `${shift.title}: ${d}, ${shift.startTime}–${shift.endTime}`,
+        url: "/plan",
+      });
+    }
     return res.json(assignment);
   } catch (err: any) {
     if (err?.code) return res.status(err.code === "NOT_FOUND" ? 404 : 409).json(err);

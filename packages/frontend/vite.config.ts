@@ -29,6 +29,8 @@ export default defineConfig({
         // sonst bekommt z.B. ein <iframe src="/api/documents/:id/view"> die
         // index.html statt der Datei (PDF blieb weiß).
         navigateFallbackDenylist: [/^\/api\//],
+        // Eigenen Push-/Notification-Handler in den SW laden.
+        importScripts: ["/push-sw.js"],
       }
     })
   ],

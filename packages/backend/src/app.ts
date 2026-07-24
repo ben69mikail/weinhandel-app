@@ -18,6 +18,7 @@ import hygieneRouter from "./routes/hygiene.js";
 import tipsRouter from "./routes/tips.js";
 import notificationsRouter from "./routes/notifications.js";
 import settingsRouter from "./routes/settings.js";
+import pushRouter from "./routes/push.js";
 
 const allowedOrigins = [process.env.FRONTEND_URL].filter(Boolean) as string[];
 
@@ -74,5 +75,6 @@ app.use("/api/hygiene", hygieneRouter);
 app.use("/api/tips", tipsRouter);
 app.use("/api/notifications", notificationsRouter);
 app.use("/api/settings", settingsRouter);
+app.use("/api/push", pushRouter);
 
 export default app;
