@@ -3,11 +3,20 @@ import { prisma } from "../lib/prisma.js";
 
 const PUB = process.env.VAPID_PUBLIC_KEY;
 const PRIV = process.env.VAPID_PRIVATE_KEY;
-const SUBJECT = process.env.VAPID_SUBJECT ?? "mailto:admin@weinhandel.de";
+// web-push verlangt eine mailto:- oder https-URL. Nackte E-Mail → mailto: davor.
+const rawSubject = process.env.VAPID_SUBJECT ?? "mailto:admin@weinhandel.de";
+const SUBJECT = /^(mailto:|https?:)/i.test(rawSubject) ? rawSubject : `mailto:${rawSubject}`;
 
-export const pushConfigured = Boolean(PUB && PRIV);
+// let, weil eine fehlerhafte VAPID-Config Push abschaltet (statt die ganze
+// Function beim Import zu crashen).
+export let pushConfigured = Boolean(PUB && PRIV);
 if (pushConfigured) {
-  webpush.setVapidDetails(SUBJECT, PUB!, PRIV!);
+  try {
+    webpush.setVapidDetails(SUBJECT, PUB!, PRIV!);
+  } catch (err) {
+    console.error("[push] VAPID-Init fehlgeschlagen — Push deaktiviert:", (err as Error).message);
+    pushConfigured = false;
+  }
 } else {
   console.warn("[push] VAPID keys fehlen — Push-Benachrichtigungen deaktiviert");
 }
