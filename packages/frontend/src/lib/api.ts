@@ -19,8 +19,13 @@ api.interceptors.response.use(
   (r) => r,
   (err) => {
     if (err.response?.status === 401) {
+      // WICHTIG: auch den zustand-Store-Persist ("weinhandel-auth") leeren.
+      // Sonst hält der Store den (ungültigen) Login weiter → Routing schickt
+      // wieder in die App → API 401 → /login → Endlos-Loop, App hängt.
+      // Tritt auf bei abgelaufenem ODER widerrufenem Token (tokenVersion).
       localStorage.removeItem("token");
-      window.location.href = "/login";
+      localStorage.removeItem("weinhandel-auth");
+      if (window.location.pathname !== "/login") window.location.href = "/login";
     }
     return Promise.reject(err);
   }
