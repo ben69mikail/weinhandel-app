@@ -9,7 +9,9 @@ const router = Router();
 router.use(authenticate);
 
 const createUserSchema = z.object({
-  email: z.string().email(),
+  // Immer kleinschreiben: Login sucht per email.toLowerCase(); sonst können
+  // groß geschriebene E-Mails sich nicht mehr einloggen.
+  email: z.string().email().toLowerCase(),
   password: z.string().min(8),
   firstName: z.string().min(1),
   lastName: z.string().min(1),
