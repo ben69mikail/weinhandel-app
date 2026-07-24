@@ -1,5 +1,17 @@
 import { describe, it, expect } from "vitest";
-import { vacationHours, vacationDaysInRange } from "./reporting-logic.js";
+import { vacationHours, vacationDaysInRange, reportDiffMinutes } from "./reporting-logic.js";
+
+describe("reportDiffMinutes — Differenz inkl. Urlaub", () => {
+  it("Urlaub zählt als erfüllte Zeit: Netto + Urlaubsstunden − Soll", () => {
+    // Soll 100h, gearbeitet 80h netto, 20h Urlaub → genau erfüllt → 0
+    expect(reportDiffMinutes(80 * 60, 20, 100 * 60)).toBe(0);
+  });
+
+  it("negativ, wenn Netto + Urlaub unter Soll", () => {
+    // Soll 100h, 70h netto, 10h Urlaub → 80h → −20h (−1200 min)
+    expect(reportDiffMinutes(70 * 60, 10, 100 * 60)).toBe(-20 * 60);
+  });
+});
 
 describe("vacationHours — Urlaub in Stunden statt Tagen", () => {
   it("rechnet Tage × Stunden-pro-Tag (Beispiel Jena: 5 × 4 = 20)", () => {

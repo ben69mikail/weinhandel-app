@@ -49,7 +49,8 @@ export default function Reporting() {
   const entries = report;
   const totalSoll = entries.reduce((s, e) => s + (e.sollMinutes ?? 0), 0);
   const totalIst = entries.reduce((s, e) => s + (e.netMinutes ?? 0), 0);
-  const totalDiff = totalIst - totalSoll;
+  const totalVacationMin = entries.reduce((s, e) => s + (e.vacationHours ?? 0) * 60, 0);
+  const totalDiff = totalIst + totalVacationMin - totalSoll;
 
   return (
     <div className="space-y-6">
@@ -99,7 +100,8 @@ export default function Reporting() {
               {entries.length === 0 ? (
                 <tr><td colSpan={6} className="px-4 py-10 text-center text-gray-400">Keine Daten für {month}</td></tr>
               ) : entries.map((e) => {
-                const diff = (e.netMinutes ?? 0) - (e.sollMinutes ?? 0);
+                // Urlaub zählt als erfüllte Zeit mit
+                const diff = (e.netMinutes ?? 0) + (e.vacationHours ?? 0) * 60 - (e.sollMinutes ?? 0);
                 return (
                   <tr key={e.user.id} className="border-b border-gray-50 hover:bg-gray-50">
                     <td className="px-4 py-3 font-medium text-gray-900">{e.user.firstName} {e.user.lastName}</td>

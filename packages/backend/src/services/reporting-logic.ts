@@ -5,6 +5,16 @@ export function vacationHours(days: number, hoursPerDay: number): number {
   return days * hoursPerDay;
 }
 
+// Differenz zum Soll: Urlaub zählt als erfüllte Arbeitszeit mit.
+// (Netto-Arbeitsminuten + Urlaubsstunden×60) − Soll-Minuten.
+export function reportDiffMinutes(
+  netMinutes: number,
+  vacationHoursValue: number,
+  sollMinutes: number,
+): number {
+  return netMinutes + vacationHoursValue * 60 - sollMinutes;
+}
+
 const DAY_MS = 86400000;
 
 // Zählt die Urlaubstage eines Antrags [start, end] (inklusive), beschnitten auf

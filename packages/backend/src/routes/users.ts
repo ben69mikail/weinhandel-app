@@ -25,7 +25,9 @@ const createUserSchema = z.object({
 });
 
 const updateUserSchema = createUserSchema.partial().omit({ password: true }).extend({
-  password: z.string().min(8).optional(),
+  // Leeres Passwort = "nicht ändern" (die Route hasht nur bei echtem Wert).
+  // Ohne die "" -Variante scheitert das Bearbeiten-Formular an min(8).
+  password: z.union([z.string().min(8), z.literal("")]).optional(),
   isActive: z.boolean().optional(),
 });
 

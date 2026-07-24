@@ -3,7 +3,7 @@ import { prisma } from "../lib/prisma.js";
 import { authenticate, AuthRequest } from "../middleware/auth.js";
 import { adminOnly } from "../middleware/adminOnly.js";
 import { buildDatevCsv } from "../services/scheduler-logic.js";
-import { vacationDaysInRange, vacationHours } from "../services/reporting-logic.js";
+import { vacationDaysInRange, vacationHours, reportDiffMinutes } from "../services/reporting-logic.js";
 
 const router = Router();
 router.use(authenticate, adminOnly);
@@ -41,8 +41,8 @@ router.get("/monthly", async (req: AuthRequest, res: Response) => {
       const vacHours = vacationHours(vacationDays, u.vacationHoursPerDay ?? 8);
       return {
         user: u, entries: userEntries, netMinutes, grossMinutes, breakMinutes,
-        sollMinutes, diff: netMinutes - sollMinutes, days: userEntries.length,
-        vacationDays, vacationHours: vacHours,
+        sollMinutes, diff: reportDiffMinutes(netMinutes, vacHours, sollMinutes),
+        days: userEntries.length, vacationDays, vacationHours: vacHours,
       };
     });
     return res.json(report);
